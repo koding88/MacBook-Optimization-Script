@@ -2,6 +2,13 @@
 
 This shell script is designed to optimize a MacBook with an Intel processor. The script includes a series of commands that disable certain features, enable others, and make changes to settings to improve performance.
 
+## Installation
+Open your Mac's Terminal to run the script.
+
+```bash
+sudo sh ./<script_name>.sh
+```
+
 ## Usage
 
 1. Download the shell script and save it to your MacBook.
