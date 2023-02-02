@@ -6,7 +6,7 @@ This shell script is designed to optimize a MacBook with an Intel processor. The
 Open your Mac's Terminal to run the script.
 
 ```bash
-sudo sh ./script.sh
+sudo sh ./script_name.sh
 ```
 
 ## Usage
@@ -18,7 +18,13 @@ sudo sh ./script.sh
 4. Run the script with the following command: 
 ```./<script_name>.sh```
 
-## Content 
+## Requirements
+- A MacBook with an Intel processor
+- macOS operating system
+- Terminal access
+
+
+## Features 
 
 The script includes the following optimizations:
 
@@ -34,6 +40,9 @@ The script includes the following optimizations:
 10. Disables hibernation and sleep
 11. Flushes the DNS cache
 12. Optimizes spotlight for faster searches
+
+## Disclaimer 
+This script is provided as-is and is intended to be used at your own risk. The script has been tested on a MacBook with an Intel processor, but there is always the potential for unintended consequences or issues arising from changes made to a computer's operating system. Before making any changes, it is always a good idea to backup important data. If you are unsure about the effects of any changes, it is recommended that you consult with an experienced tech professional.
 
 ## Contributing
 
