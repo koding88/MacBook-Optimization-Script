@@ -6,7 +6,7 @@ This shell script is designed to optimize a MacBook with an Intel processor. The
 Open your Mac's Terminal to run the script.
 
 ```bash
-sudo sh ./<script_name>.sh
+sudo sh ./&lt;script_name&gt;.sh
 ```
 
 ## Usage
