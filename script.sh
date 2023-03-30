@@ -36,3 +36,21 @@ sudo dscacheutil -flushcache
 
 # Optimize spotlight for faster searches
 sudo mdutil -E /
+
+# Disable Dashboard
+defaults write com.apple.dashboard mcx-disabled -boolean YES && killall Dock
+
+# Disable animations
+defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
+defaults write -g QLPanelAnimationDuration -float 0
+defaults write com.apple.finder DisableAllAnimations -bool true
+
+# Disable local Time Machine snapshots
+sudo tmutil disablelocal
+
+# Enable Secure Empty Trash
+defaults write com.apple.finder EmptyTrashSecurely -bool true
+
+# Clear font caches
+sudo atsutil databases -remove
+
