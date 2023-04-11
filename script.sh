@@ -54,3 +54,10 @@ defaults write com.apple.finder EmptyTrashSecurely -bool true
 # Clear font caches
 sudo atsutil databases -remove
 
+#!/bin/bash
+
+echo "Adding command to remove .DS_Store files from new folders"
+echo "find . -name '.DS_Store' -depth -exec rm {} \;" >> ~/.profile
+source ~/.profile
+
+echo "Command added successfully"
