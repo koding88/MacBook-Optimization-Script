@@ -46,6 +46,7 @@ The script includes the following optimizations:
 15. Disables local Time Machine snapshots
 16. Enables Secure Empty Trash
 17. Clears font caches
+18. Remove .DS_Store files from new folders
 
 ## Disclaimer
 
