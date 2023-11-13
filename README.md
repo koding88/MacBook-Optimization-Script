@@ -15,15 +15,19 @@ sudo sh ./script_name.sh
 1. Download the shell script and save it to your MacBook.
 2. Open the terminal and navigate to the directory where the script is saved.
 3. Make the script executable with the following command:
-   `chmod +x <script_name>.sh`
+   ```bash
+   chmod +x <script_name>.sh
+   ```
 4. Run the script with the following command:
-   `./<script_name>.sh`
+   ```bash
+   ./<script_name>.sh
+   ```
 
 ## Requirements
 
--   A MacBook with an Intel processor
--   macOS operating system
--   Terminal access
+- A MacBook with an Intel processor
+- macOS operating system
+- Terminal access
 
 ## Features
 
@@ -46,7 +50,9 @@ The script includes the following optimizations:
 15. Disables local Time Machine snapshots
 16. Enables Secure Empty Trash
 17. Clears font caches
-18. Remove .DS_Store files from new folders
+18. Removes .DS_Store files from new folders
+19. Optimizes network settings
+20. Optimizes system performance
 
 ## Disclaimer
 
@@ -54,8 +60,7 @@ This script is provided as-is and is intended to be used at your own risk. The s
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first
-to discuss what you would like to change.
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 Please make sure to update tests as appropriate.
 
