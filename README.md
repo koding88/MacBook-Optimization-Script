@@ -1,69 +1,137 @@
-# MacBook Optimization Script
+# 🚀 MacBook Optimization Script
 
-This shell script is designed to optimize a MacBook with an Intel processor. The script includes a series of commands that disable certain features, enable others, and make changes to settings to improve performance.
+## 📋 Overview
 
-## Installation
+MacBook Optimization Script is a comprehensive tool designed to enhance your MacBook's performance through various optimizations and provide real-time system monitoring. Built with modularity in mind, it offers an intuitive interface and extensive customization options.
 
-Open your Mac's Terminal to run the script.
+### 🌟 Key Highlights
+
+-   📊 Real-time system monitoring
+-   🔧 One-click optimizations
+-   🔄 Automatic status tracking
+-   🛡️ Safe and reversible changes
+-   📱 User-friendly interface
+
+## 🚀 Quick Start
 
 ```bash
-sudo sh ./script_name.sh
+# Clone this repository
+git clone https://github.com/koding88/MacBook-Optimization-Script.git
+
+# Go into the repository
+cd MacBook-Optimization-Script
+
+# Make the script executable
+chmod +x script.sh
+
+# Run the script
+./script.sh
 ```
 
-## Usage
+## 📚 Documentation
 
-1. Download the shell script and save it to your MacBook.
-2. Open the terminal and navigate to the directory where the script is saved.
-3. Make the script executable with the following command:
-   ```bash
-   chmod +x <script_name>.sh
+### System Requirements
+
+-   macOS 10.15 (Catalina) or later
+-   Administrative privileges
+-   Terminal access
+-   Internet connection (for some features)
+
+### Directory Structure
+
+```
+MacBook-Optimization-Script/
+├── script.sh              # Main script
+├── modules/              # Module directory
+│   ├── config.sh         # Configuration module
+│   ├── ui_components.sh  # UI components
+│   ├── system_opt.sh     # System optimizations
+│   └── ...              # Other modules
+├── assets/              # Images and resources
+└── docs/               # Documentation
+```
+
+## ✨ Features
+
+### 🖥 System Optimizations
+- CPU and Memory optimization
+- SSD performance tuning 
+- Security enhancements
+- Power management optimization
+
+### 🌐 Network Optimizations
+- TCP/IP stack optimization
+- DNS cache management
+- Firewall configuration 
+- Network performance tuning
+
+### 💾 Storage Optimizations
+- System cache cleanup
+- Unused language removal
+- Font cache optimization
+- .DS_Store file management
+
+### ⚡ Performance Tweaks
+- Spotlight indexing control
+- Animation optimization
+- Dashboard management
+- Dock performance tuning
+
+## 📊 Status Tracking
+
+The script includes a comprehensive status tracking system that provides:
+
+| Feature           | Description                               |
+| ----------------- | ----------------------------------------- |
+| Real-time Updates | Immediate feedback on optimization status |
+| History Logging   | Track all performed optimizations         |
+| Success Metrics   | Monitor success/failure rates             |
+| Timestamps        | Record when optimizations were performed  |
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how you can help:
+
+1. Fork the repository at https://github.com/koding88/MacBook-Optimization-Script/fork
+2. Create your feature branch: 
    ```
-4. Run the script with the following command:
-   ```bash
-   ./<script_name>.sh
+   git checkout -b feature/AmazingFeature
    ```
+3. Commit your changes:
+   ```
+   git commit -m 'Add some AmazingFeature'
+   ```
+4. Push to the branch:
+   ```
+   git push origin feature/AmazingFeature
+   ```
+5. Open a Pull Request at https://github.com/koding88/MacBook-Optimization-Script/pulls
 
-## Requirements
+For more details, please see our [Contributing Guidelines](CONTRIBUTING.md).
 
-- A MacBook with an Intel processor
-- macOS operating system
-- Terminal access
+## 🔒 Security
 
-## Features
+This script requires administrative privileges. Please:
 
-The script includes the following optimizations:
+-   Review the code before running
+-   Keep your system up to date
+-   Back up important data
+-   Report security issues through our [Security Policy](SECURITY.md)
 
-1. Disables spotlight indexing
-2. Disables sleep image to save disk space
-3. Disables App Nap
-4. Disables automatic termination of inactive apps
-5. Enables continuous disk checking
-6. Enables TRIM
-7. Enables lid wake
-8. Optimizes swap usage
-9. Disables the sudden motion sensor
-10. Disables hibernation and sleep
-11. Flushes the DNS cache
-12. Optimizes spotlight for faster searches
-13. Disables the Dashboard
-14. Disables animations
-15. Disables local Time Machine snapshots
-16. Enables Secure Empty Trash
-17. Clears font caches
-18. Removes .DS_Store files from new folders
-19. Optimizes network settings
-20. Optimizes system performance
+## 📝 License
 
-## Disclaimer
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-This script is provided as-is and is intended to be used at your own risk. The script has been tested on a MacBook with an Intel processor, but there is always the potential for unintended consequences or issues arising from changes made to a computer's operating system. Before making any changes, it is always a good idea to backup important data. If you are unsure about the effects of any changes, it is recommended that you consult with an experienced tech professional.
+## 🙏 Acknowledgments
 
-## Contributing
+-   [Apple Developer Documentation](https://developer.apple.com/documentation/)
+-   [MacOS Command Line Tools](https://developer.apple.com/library/archive/technotes/tn2002/tn2002.html)
+-   All [contributors](https://github.com/koding88/MacBook-Optimization-Script/graphs/contributors)
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+## 📞 Support
 
-Please make sure to update tests as appropriate.
+Need help? Here are some resources:
+-   🐛 Report bugs in [Issues](https://github.com/koding88/MacBook-Optimization-Script/issues)
+-   📧 Contact: [duongngocanh2k03@gmail.com](mailto:duongngocanh2k03@gmail.com)
 
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
+---
