@@ -1,78 +1,84 @@
 #!/bin/bash
 
-# System Monitoring Functions
+# Define Colors
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+BLUE="\033[0;34m"
+NC="\033[0m" # No Color
 
+# Check Required Commands
+function check_command() {
+    if ! command -v "$1" &> /dev/null; then
+        echo -e "${RED}Error: $1 is not installed. Please install it first.${NC}"
+        exit 1
+    fi
+}
+
+# Function to Display System Info
 function display_system_info() {
     local info_type=$1
     
+    echo -e "\n${BLUE}===== ${info_type^^} Information =====${NC}"
+    
     case $info_type in
         "cpu")
-            clear
-            echo -e "\n${YELLOW}CPU Information:${NC}"
-            echo -e "CPU Model: $(sysctl -n machdep.cpu.brand_string)"
-            echo -e "CPU Cores: $(sysctl -n hw.ncpu)"
-            echo -e "CPU Speed: $(sysctl -n hw.cpufrequency_max | awk '{print $1 / 1000000000 "GHz"}')"
-            echo -e "\nCPU Load:"
+            echo -e "${YELLOW}CPU Model:${NC} $(sysctl -n machdep.cpu.brand_string)"
+            echo -e "${YELLOW}CPU Cores:${NC} $(sysctl -n hw.ncpu)"
+            echo -e "${YELLOW}CPU Speed:${NC} $(sysctl -n hw.cpufrequency_max | awk '{print $1 / 1000000000 " GHz"}')"
+            echo -e "\n${YELLOW}CPU Load:${NC}"
             top -l 1 | grep -E "^CPU"
             ;;
         "memory")
-            clear
-            echo -e "\n${YELLOW}Memory Status:${NC}"
-            echo -e "Total RAM: $(sysctl -n hw.memsize | awk '{print $1 / 1024/1024/1024 "GB"}')"
+            echo -e "${YELLOW}Total RAM:${NC} $(sysctl -n hw.memsize | awk '{print $1 / 1024/1024/1024 " GB"}')"
+            check_command perl
             vm_stat | perl -ne '/page size of (\d+)/ and $size=$1; /Pages\s+([^:]+)[^0-9]+(\d+)/ and printf("%-16s % 16.2f MB\n", "$1:", $2 * $size / 1048576);'
             ;;
         "gpu")
-            clear
-            echo -e "\n${YELLOW}GPU Information:${NC}"
             system_profiler SPDisplaysDataType | grep -A 10 "Chipset Model"
             ;;
         "battery")
-            clear
-            echo -e "\n${YELLOW}Battery Information:${NC}"
             pmset -g batt | grep -v "Now drawing from"
             system_profiler SPPowerDataType | grep -E "Cycle Count|Condition|Charge Remaining|Charging|Full Charge Capacity|Battery Installed"
             ;;
         "disk")
-            clear
-            echo -e "\n${YELLOW}Disk Space:${NC}"
-            df -h / | tail -n 1 | awk '{print "Used: " $3 " of " $2 " (" $5 " used)"}'
+            echo -e "${YELLOW}Disk Space:${NC}"
+            df -h / | awk 'NR==2{print "Used: " $3 " of " $2 " (" $5 " used)"}'
             ;;
         "network")
-            clear
-            echo -e "\n${YELLOW}Network Status:${NC}"
-            echo -e "Active Interfaces:"
+            echo -e "${YELLOW}Active Interfaces:${NC}"
             netstat -nr | grep default | awk '{print $NF}'
             ;;
         "temperature")
-            clear
-            echo -e "\n${YELLOW}Temperature Sensors:${NC}"
             if command -v istats &> /dev/null; then
                 istats
             else
-                echo "Installing iStats for temperature monitoring..."
+                echo -e "${RED}iStats not found! Installing iStats...${NC}"
                 sudo gem install iStats
                 istats
             fi
             ;;
+        *)
+            echo -e "${RED}Invalid option. Please choose a valid system info category.${NC}"
+            ;;
     esac
 }
 
+# Function for System Status Check
 function check_system_status() {
     while true; do
         clear
-        echo -e "\n${BLUE}=== System Status Check ===${NC}"
-        echo -e "${BLUE}------------------------${NC}"
-        echo -e "\nChoose information to view:"
-        echo -e "${YELLOW}1. CPU Information${NC}"
-        echo -e "${YELLOW}2. Memory Status${NC}"
-        echo -e "${YELLOW}3. GPU Information${NC}"
-        echo -e "${YELLOW}4. Battery Information${NC}"
-        echo -e "${YELLOW}5. Disk Space${NC}"
-        echo -e "${YELLOW}6. Network Status${NC}"
-        echo -e "${YELLOW}7. Temperature Sensors${NC}"
-        echo -e "${YELLOW}8. View All Information${NC}"
-        echo -e "${YELLOW}0. Back to Main Menu${NC}"
-        
+        echo -e "${BLUE}=== System Status Menu ===${NC}"
+        echo -e "${YELLOW}1.${NC} CPU Information"
+        echo -e "${YELLOW}2.${NC} Memory Status"
+        echo -e "${YELLOW}3.${NC} GPU Information"
+        echo -e "${YELLOW}4.${NC} Battery Information"
+        echo -e "${YELLOW}5.${NC} Disk Space"
+        echo -e "${YELLOW}6.${NC} Network Status"
+        echo -e "${YELLOW}7.${NC} Temperature Sensors"
+        echo -e "${YELLOW}8.${NC} View All Information"
+        echo -e "${YELLOW}0.${NC} Exit"
+
         read -p "Enter your choice (0-8): " info_choice
         
         case $info_choice in
@@ -90,15 +96,11 @@ function check_system_status() {
                     read
                 done
                 ;;
-            0) return ;;
+            0) echo -e "${GREEN}Exiting System Monitor.${NC}"; exit 0 ;;
             *) echo -e "${RED}Invalid choice. Please enter a number between 0 and 8.${NC}" ;;
         esac
-        
-        if [ "$info_choice" != "0" ] && [ "$info_choice" != "8" ]; then
-            echo -e "\nPress Enter to return to system status menu..."
-            read
-        fi
-    done
 
-    check_status "System status check completed" "system_check"
-} 
+        echo -e "\nPress Enter to return to the menu..."
+        read
+    done
+}
