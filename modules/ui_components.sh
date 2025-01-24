@@ -1,34 +1,14 @@
 #!/bin/bash
 
-# ==============================
-# 🚀 MacBook Optimization UI
-# ==============================
+# UI Components
 
-# Define Colors for Output
-RED="\033[0;31m"
-GREEN="\033[0;32m"
-YELLOW="\033[0;33m"
-BLUE="\033[0;34m"
-NC="\033[0m" # No Color
-
-# Configuration File for Tracking Feature Status
-CONFIG_FILE="/tmp/mac_optimization_status.log"
-
-# Ensure the config file exists
-touch "$CONFIG_FILE"
-
-# ==============================
-# 📌 UI Functions
-# ==============================
-
-# Print a formatted menu item
 function print_menu_item() {
     local number=$1
     local description=$2
     local feature_id=$3
     local padding=$4
     
-    # Print menu item with padding for alignment
+    # Print menu item
     printf "%-${padding}s" "$number. $description"
     
     # Print status if feature_id is provided
@@ -50,18 +30,16 @@ function print_menu_item() {
     fi
 }
 
-# Print a section header with formatting
 function print_section_header() {
     local title=$1
     echo -e "\n${YELLOW}$title${NC}"
     echo -e "${BLUE}$(printf '=%.0s' {1..60})${NC}"
 }
 
-# Display a quick summary of optimizations
 function show_quick_summary() {
     echo -e "\n${BLUE}Quick Status Summary:${NC}"
     echo -e "${BLUE}------------------${NC}"
-    local total=$(wc -l < "$CONFIG_FILE" | tr -d ' ')
+    local total=$(wc -l < "$CONFIG_FILE")
     local enabled=$(grep -c "=enabled|" "$CONFIG_FILE")
     local failed=$(grep -c "=failed|" "$CONFIG_FILE")
     echo -e "Total Optimizations Run: ${YELLOW}$total${NC}"
@@ -70,9 +48,7 @@ function show_quick_summary() {
     echo -e "${BLUE}------------------${NC}"
 }
 
-# Display the main menu
 function display_main_menu() {
-    clear
     echo -e "${GREEN}=== MacBook Optimization Script ===${NC}"
     
     # Show quick status summary
@@ -122,9 +98,4 @@ function display_main_menu() {
 
     echo -e "\n${BLUE}$(printf '=%.0s' {1..60})${NC}"
     print_menu_item "0" "Quit" "" 45
-}
-
-# ==============================
-# 🚀 Run the Optimization Menu
-# ==============================
-display_main_menu
+} 

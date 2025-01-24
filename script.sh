@@ -20,9 +20,6 @@ function main() {
         clear
         display_main_menu
         handle_user_choice
-        if [ $? -eq 0 ]; then
-            break
-        fi
     done
 }
 
