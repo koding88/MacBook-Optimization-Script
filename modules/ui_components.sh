@@ -62,6 +62,7 @@ function display_main_menu() {
     print_menu_item "4" "Optimize Security" "security_optimization" 45
     print_menu_item "5" "Optimize Power Settings" "power_optimization" 45
     print_menu_item "23" "Toggle Power Saving Mode" "power_saving" 45
+    print_menu_item "25" "Toggle AutoBoot (Intel Only)" "autoboot" 45
 
     # Network Optimizations Section
     print_section_header "Network Optimizations"

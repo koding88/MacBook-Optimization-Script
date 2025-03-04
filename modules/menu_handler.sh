@@ -106,6 +106,10 @@ function handle_user_choice() {
                 check_system_status
                 get_feature_status "system_check"
                 ;;
+            25)
+                toggle_auto_boot
+                get_feature_status "autoboot"
+                ;;
             0)
                 echo -e "${GREEN}Quitting the script. Bye!${NC}"
                 exit 0
