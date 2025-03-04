@@ -61,8 +61,6 @@ function display_main_menu() {
     print_menu_item "3" "Optimize SSD Settings" "ssd_optimization" 45
     print_menu_item "4" "Optimize Security" "security_optimization" 45
     print_menu_item "5" "Optimize Power Settings" "power_optimization" 45
-    print_menu_item "23" "Toggle Power Saving Mode" "power_saving" 45
-    print_menu_item "25" "Toggle AutoBoot (Intel Only)" "autoboot" 45
 
     # Network Optimizations Section
     print_section_header "Network Optimizations"
@@ -95,7 +93,10 @@ function display_main_menu() {
     print_section_header "System Monitoring and Status"
     print_menu_item "21" "View All Optimization States" "" 45
     print_menu_item "22" "Reset All Optimizations" "" 45
-    print_menu_item "24" "Check System Status" "system_check" 45
+    print_menu_item "23" "Check System Status" "system_check" 45
+    print_menu_item "24" "Toggle Power Saving Mode" "power_saving" 45
+    print_menu_item "25" "Toggle AutoBoot (Intel Only)" "autoboot" 45
+    print_menu_item "26" "Check MDM Status" "" 45
 
     echo -e "\n${BLUE}$(printf '=%.0s' {1..60})${NC}"
     print_menu_item "0" "Quit" "" 45

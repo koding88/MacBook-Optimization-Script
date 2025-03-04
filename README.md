@@ -11,6 +11,8 @@ MacBook Optimization Script is a comprehensive tool designed to enhance your Mac
 -   🔄 Automatic status tracking
 -   🛡️ Safe and reversible changes
 -   📱 User-friendly interface
+-   🔍 MDM Status Detection
+-   💻 Intel/Apple Silicon compatibility checks
 
 ## 🚀 Quick Start
 
@@ -45,7 +47,9 @@ MacBook-Optimization-Script/
 ├── modules/              # Module directory
 │   ├── config.sh         # Configuration module
 │   ├── ui_components.sh  # UI components
-│   ├── system_opt.sh     # System optimizations
+│   ├── menu_handler.sh   # Menu handling
+│   ├── power_management.sh # Power and boot management
+│   ├── system_monitoring.sh # System monitoring
 │   └── ...              # Other modules
 ├── assets/              # Images and resources
 └── docs/               # Documentation
@@ -54,28 +58,48 @@ MacBook-Optimization-Script/
 ## ✨ Features
 
 ### 🖥 System Optimizations
-- CPU and Memory optimization
-- SSD performance tuning 
-- Security enhancements
-- Power management optimization
+
+-   CPU and Memory optimization
+-   SSD performance tuning
+-   Security enhancements
+-   Power management optimization
+-   AutoBoot control (Intel Macs)
+-   MDM status detection
 
 ### 🌐 Network Optimizations
-- TCP/IP stack optimization
-- DNS cache management
-- Firewall configuration 
-- Network performance tuning
+
+-   TCP/IP stack optimization
+-   DNS cache management
+-   Firewall configuration
+-   Network performance tuning
 
 ### 💾 Storage Optimizations
-- System cache cleanup
-- Unused language removal
-- Font cache optimization
-- .DS_Store file management
+
+-   System cache cleanup
+-   Unused language removal
+-   Font cache optimization
+-   .DS_Store file management
 
 ### ⚡ Performance Tweaks
-- Spotlight indexing control
-- Animation optimization
-- Dashboard management
-- Dock performance tuning
+
+-   Spotlight indexing control
+-   Animation optimization
+-   Dashboard management
+-   Dock performance tuning
+
+### 🔋 Power Management
+
+-   Power saving mode toggle
+-   AutoBoot control (Intel Macs)
+-   Sleep/Wake optimization
+-   Battery life enhancement
+
+### 🔍 System Monitoring
+
+-   Real-time performance tracking
+-   MDM status detection
+-   System health checks
+-   Optimization status tracking
 
 ## 📊 Status Tracking
 
@@ -87,24 +111,25 @@ The script includes a comprehensive status tracking system that provides:
 | History Logging   | Track all performed optimizations         |
 | Success Metrics   | Monitor success/failure rates             |
 | Timestamps        | Record when optimizations were performed  |
+| MDM Detection     | Check for Mobile Device Management        |
 
 ## 🤝 Contributing
 
 We welcome contributions! Here's how you can help:
 
 1. Fork the repository at https://github.com/koding88/MacBook-Optimization-Script/fork
-2. Create your feature branch: 
-   ```
-   git checkout -b feature/AmazingFeature
-   ```
+2. Create your feature branch:
+    ```
+    git checkout -b feature/AmazingFeature
+    ```
 3. Commit your changes:
-   ```
-   git commit -m 'Add some AmazingFeature'
-   ```
+    ```
+    git commit -m 'Add some AmazingFeature'
+    ```
 4. Push to the branch:
-   ```
-   git push origin feature/AmazingFeature
-   ```
+    ```
+    git push origin feature/AmazingFeature
+    ```
 5. Open a Pull Request at https://github.com/koding88/MacBook-Optimization-Script/pulls
 
 For more details, please see our [Contributing Guidelines](CONTRIBUTING.md).
@@ -131,6 +156,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 Need help? Here are some resources:
+
 -   🐛 Report bugs in [Issues](https://github.com/koding88/MacBook-Optimization-Script/issues)
 -   📧 Contact: [duongngocanh2k03@gmail.com](mailto:duongngocanh2k03@gmail.com)
 

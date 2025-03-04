@@ -99,16 +99,19 @@ function handle_user_choice() {
                 echo -e "${GREEN}All optimization states reset${NC}"
                 ;;
             23)
-                toggle_power_saving
-                get_feature_status "power_saving"
-                ;;
-            24)
                 check_system_status
                 get_feature_status "system_check"
+                ;;
+            24)
+                toggle_power_saving
+                get_feature_status "power_saving"
                 ;;
             25)
                 toggle_auto_boot
                 get_feature_status "autoboot"
+                ;;
+            26)
+                check_mdm_status
                 ;;
             0)
                 echo -e "${GREEN}Quitting the script. Bye!${NC}"

@@ -41,6 +41,51 @@ function toggle_power_saving() {
     pmset -g
 }
 
+function check_mdm_status() {
+    echo -e "${YELLOW}Checking MDM (Mobile Device Management) Status...${NC}"
+    echo "----------------------------------------"
+    
+    local mdm_detected=false
+    local mdm_details=""
+    
+    # Check 1: Examine /etc/hosts for MDM blocking entries
+    echo -e "\n${BLUE}Checking /etc/hosts for MDM entries:${NC}"
+    if grep -q "deviceenrollment.apple.com\|mdmenrollment.apple.com\|iprofiles.apple.com" /etc/hosts; then
+        echo -e "${RED}Found MDM blocking entries in /etc/hosts:${NC}"
+        grep "deviceenrollment.apple.com\|mdmenrollment.apple.com\|iprofiles.apple.com" /etc/hosts
+        mdm_detected=true
+        mdm_details+="MDM blocking entries found in /etc/hosts\n"
+    else
+        echo -e "${GREEN}No MDM blocking entries found in /etc/hosts${NC}"
+    fi
+    
+    # Check 2: Check enrollment profiles
+    echo -e "\n${BLUE}Checking enrollment profiles:${NC}"
+    local profile_output=$(sudo profiles show -type enrollment 2>&1)
+    if [[ $profile_output == *"There are no enrollment profiles"* ]]; then
+        echo -e "${GREEN}No enrollment profiles found${NC}"
+    else
+        echo -e "${RED}Enrollment profiles detected:${NC}"
+        echo "$profile_output"
+        mdm_detected=true
+        mdm_details+="MDM enrollment profiles detected\n"
+    fi
+    
+    # Summary
+    echo -e "\n${YELLOW}MDM Status Summary:${NC}"
+    if [ "$mdm_detected" = true ]; then
+        echo -e "${RED}MDM Detection: POSITIVE${NC}"
+        echo -e "Details:"
+        echo -e "$mdm_details"
+        echo -e "\nRecommendation: Your device appears to be under MDM control."
+    else
+        echo -e "${GREEN}MDM Detection: NEGATIVE${NC}"
+        echo "Your device appears to be free from MDM control."
+    fi
+    
+    read -p "Press Enter to continue..."
+}
+
 function toggle_auto_boot() {
     echo "AutoBoot Feature Management..."
     
