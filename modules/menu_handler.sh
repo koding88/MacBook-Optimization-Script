@@ -94,9 +94,26 @@ function handle_user_choice() {
                 show_all_statuses
                 ;;
             22)
-                rm "$CONFIG_FILE"
-                touch "$CONFIG_FILE"
-                echo -e "${GREEN}All optimization states reset${NC}"
+                echo -e "${YELLOW}Resetting all optimization states...${NC}"
+                if [ -f "$CONFIG_FILE" ]; then
+                    if rm "$CONFIG_FILE" 2>/dev/null; then
+                        if initialize_config; then
+                            echo -e "${GREEN}All optimization states reset successfully${NC}"
+                        else
+                            echo -e "${RED}Failed to recreate config file${NC}"
+                        fi
+                    else
+                        echo -e "${RED}Failed to remove existing config file${NC}"
+                        echo -e "${YELLOW}You may need to manually delete: $CONFIG_FILE${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}Config file doesn't exist, creating new one...${NC}"
+                    if initialize_config; then
+                        echo -e "${GREEN}Config file created successfully${NC}"
+                    else
+                        echo -e "${RED}Failed to create config file${NC}"
+                    fi
+                fi
                 ;;
             23)
                 check_system_status

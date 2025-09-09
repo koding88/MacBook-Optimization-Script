@@ -14,7 +14,13 @@ source ./modules/menu_handler.sh
 
 # Main script execution
 function main() {
-    initialize_config
+    echo -e "${BLUE}Initializing MacBook Optimization Script...${NC}"
+    
+    if ! initialize_config; then
+        echo -e "${RED}Failed to initialize configuration. Script may not work properly.${NC}"
+        echo -e "${YELLOW}Press any key to continue anyway, or Ctrl+C to exit...${NC}"
+        read -n 1 -s
+    fi
     
     while true; do
         clear

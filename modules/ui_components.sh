@@ -13,7 +13,7 @@ function print_menu_item() {
     
     # Print status if feature_id is provided
     if [ ! -z "$feature_id" ]; then
-        if grep -q "^$feature_id=" "$CONFIG_FILE"; then
+        if [ -f "$CONFIG_FILE" ] && [ -r "$CONFIG_FILE" ] && grep -q "^$feature_id=" "$CONFIG_FILE" 2>/dev/null; then
             local line=$(grep "^$feature_id=" "$CONFIG_FILE" | tail -n 1)
             local status=$(echo "$line" | cut -d'|' -f1 | cut -d'=' -f2)
             local timestamp=$(echo "$line" | cut -d'|' -f2)
@@ -39,9 +39,16 @@ function print_section_header() {
 function show_quick_summary() {
     echo -e "\n${BLUE}Quick Status Summary:${NC}"
     echo -e "${BLUE}------------------${NC}"
-    local total=$(wc -l < "$CONFIG_FILE")
-    local enabled=$(grep -c "=enabled|" "$CONFIG_FILE")
-    local failed=$(grep -c "=failed|" "$CONFIG_FILE")
+    
+    if [ ! -f "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
+        echo -e "${YELLOW}Config file not accessible${NC}"
+        echo -e "${BLUE}------------------${NC}"
+        return 1
+    fi
+    
+    local total=$(wc -l < "$CONFIG_FILE" 2>/dev/null || echo "0")
+    local enabled=$(grep -c "=enabled|" "$CONFIG_FILE" 2>/dev/null || echo "0")
+    local failed=$(grep -c "=failed|" "$CONFIG_FILE" 2>/dev/null || echo "0")
     echo -e "Total Optimizations Run: ${YELLOW}$total${NC}"
     echo -e "Successfully Enabled: ${GREEN}$enabled${NC}"
     echo -e "Failed: ${RED}$failed${NC}"
