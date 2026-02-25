@@ -18,7 +18,7 @@ MacBook Optimization Script is a comprehensive tool designed to enhance your Mac
 
 ```bash
 # Clone this repository
-git clone https://github.com/koding88/MacBook-Optimization-Script.git
+git clone https://github.com/1245ym/MacBook-Optimization-Script.git
 
 # Go into the repository
 cd MacBook-Optimization-Script

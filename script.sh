@@ -14,7 +14,7 @@ source ./modules/menu_handler.sh
 
 # Main script execution
 function main() {
-    echo -e "${BLUE}Initializing MacBook Optimization Script...${NC}"
+    echo -e "${BLUE}Initializing 1245ym's MacBook Optimization Script...${NC}"
     
     if ! initialize_config; then
         echo -e "${RED}Failed to initialize configuration. Script may not work properly.${NC}"
