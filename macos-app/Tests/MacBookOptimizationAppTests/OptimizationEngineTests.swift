@@ -18,6 +18,45 @@ final class OptimizationEngineTests: XCTestCase {
         XCTAssertFalse(result.toast.message.contains("raw shell transcript"))
         XCTAssertFalse(result.activityEvent.message.contains("raw shell transcript"))
     }
+
+    func testConsecutiveAdministratorCommandsAreBatchedIntoSingleExecution() async throws {
+        let executor = RecordingSystemCommandExecutor()
+        let engine = OptimizationEngine(
+            commandExecutor: executor,
+            stateStore: InMemoryStateStore(),
+            feedbackPresenter: ActionFeedbackPresenter(localizer: AppLocalizer(language: .english))
+        )
+        let action = OptimizationAction(
+            id: "power_saving_test",
+            titleKey: "action.power_saving.title",
+            descriptionKey: "action.power_saving.description",
+            category: .monitoring,
+            symbolName: "battery.100percent",
+            statusFeatureID: nil,
+            isRisky: false,
+            estimatedTime: "5-10 seconds",
+            requiresRestart: false,
+            kind: .command([
+                CommandRequest(command: "pmset -a lowpowermode 1", requiresAdministrator: true),
+                CommandRequest(command: "pmset -a displaysleep 5", requiresAdministrator: true),
+                CommandRequest(command: "pmset -a sleep 10", requiresAdministrator: true)
+            ]),
+            status: .ready,
+            lastRunDescription: nil
+        )
+
+        _ = try await engine.execute(action)
+
+        XCTAssertEqual(executor.requests.count, 1)
+        XCTAssertEqual(
+            executor.requests.first?.command,
+            """
+            pmset -a lowpowermode 1
+            pmset -a displaysleep 5
+            pmset -a sleep 10
+            """
+        )
+    }
 }
 
 private struct MockSystemCommandExecutor: SystemCommandExecuting {
@@ -26,6 +65,15 @@ private struct MockSystemCommandExecutor: SystemCommandExecuting {
 
     func execute(_ request: CommandRequest) async throws -> CommandExecutionResult {
         CommandExecutionResult(output: output, exitCode: exitCode)
+    }
+}
+
+private final class RecordingSystemCommandExecutor: SystemCommandExecuting {
+    private(set) var requests: [CommandRequest] = []
+
+    func execute(_ request: CommandRequest) async throws -> CommandExecutionResult {
+        requests.append(request)
+        return CommandExecutionResult(output: "", exitCode: 0)
     }
 }
 

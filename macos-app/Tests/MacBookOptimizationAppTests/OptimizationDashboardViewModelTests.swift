@@ -93,6 +93,38 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testConfirmPendingActionStartsExecutionInsteadOfCancelling() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+
+        let toast = ToastMessage(type: .success, title: "Done", message: "Executed")
+        let event = ActivityEvent(type: .success, title: "Executed", message: "Ran risky action")
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(
+                result: ActionExecutionResult(
+                    status: .enabled,
+                    toast: toast,
+                    activityEvent: event
+                )
+            ),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.isRisky }))
+
+        await model.run(actionID: action.id)
+        model.confirmPendingAction()
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertNil(model.pendingConfirmationAction)
+        XCTAssertEqual(model.activityFeed.first?.title, "Executed")
+        XCTAssertFalse(model.activityFeed.contains { $0.title == "Action Cancelled" })
+    }
+
+    @MainActor
     func testCompletedActionEnqueuesToastAndFilteredActivityExcludesOlderItems() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)

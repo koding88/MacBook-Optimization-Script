@@ -60,7 +60,7 @@ final class OptimizationEngine: OptimizationExecuting {
         var combinedOutput: [String] = []
         var finalExitCode: Int32 = 0
 
-        for request in requests {
+        for request in coalescedRequests(requests) {
             let result = try await commandExecutor.execute(request)
             if !result.output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 combinedOutput.append("$ \(request.command)\n\(result.output.trimmingCharacters(in: .whitespacesAndNewlines))")
@@ -75,6 +75,28 @@ final class OptimizationEngine: OptimizationExecuting {
         }
 
         return CommandExecutionResult(output: combinedOutput.joined(separator: "\n\n"), exitCode: finalExitCode)
+    }
+
+    private func coalescedRequests(_ requests: [CommandRequest]) -> [CommandRequest] {
+        guard !requests.isEmpty else { return [] }
+
+        var batched: [CommandRequest] = []
+        var current = requests[0]
+
+        for request in requests.dropFirst() {
+            if request.requiresAdministrator == current.requiresAdministrator {
+                current = CommandRequest(
+                    command: current.command + "\n" + request.command,
+                    requiresAdministrator: current.requiresAdministrator
+                )
+            } else {
+                batched.append(current)
+                current = request
+            }
+        }
+
+        batched.append(current)
+        return batched
     }
 
     private func render(states: [String: FeatureState]) -> String {
