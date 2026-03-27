@@ -1,0 +1,227 @@
+import XCTest
+@testable import MacBookOptimizationApp
+
+final class OptimizationDashboardViewModelTests: XCTestCase {
+    @MainActor
+    func testActivityFilterExcludesOldEvents() {
+        let model = makeModel(
+            result: ActionExecutionResult(
+                status: .enabled,
+                toast: ToastMessage(type: .success, title: "Done", message: "Action completed."),
+                activityEvent: ActivityEvent(
+                    type: .success,
+                    title: "Done",
+                    message: "Action completed.",
+                    symbolName: "checkmark.circle"
+                )
+            )
+        )
+
+        model.activityFeed = [
+            ActivityItem(
+                event: ActivityEvent(
+                    timestamp: .now.addingTimeInterval(-60),
+                    type: .success,
+                    title: "Recent",
+                    message: "Visible"
+                )
+            ),
+            ActivityItem(
+                event: ActivityEvent(
+                    timestamp: .now.addingTimeInterval(-10_000),
+                    type: .info,
+                    title: "Old",
+                    message: "Hidden"
+                )
+            )
+        ]
+        model.activityFilter = .last5Minutes
+
+        XCTAssertEqual(model.filteredActivity.count, 1)
+        XCTAssertEqual(model.filteredActivity.first?.title, "Recent")
+    }
+
+    @MainActor
+    func testCompletedInspectionEnqueuesToastWithStructuredSummaryLines() async {
+        let toastID = UUID()
+        let result = ActionExecutionResult(
+            status: .enabled,
+            toast: ToastMessage(
+                id: toastID,
+                type: .success,
+                title: "Battery Snapshot",
+                message: "Inspection complete",
+                summaryLines: ["Battery: 97%", "Charging: Yes", "Cycle Count: 173"],
+                dismissAfter: 3
+            ),
+            activityEvent: ActivityEvent(
+                timestamp: .now,
+                type: .success,
+                title: "Battery Snapshot",
+                message: "Battery: 97% • Charging: Yes • Cycle Count: 173"
+            ),
+            summary: nil,
+            debugLog: nil
+        )
+
+        let model = makeModel(result: result)
+        await model.run(actionID: "system_check_battery")
+
+        XCTAssertEqual(model.toasts.first?.summaryLines.count, 3)
+        model.dismissToast(id: toastID)
+        XCTAssertTrue(model.toasts.isEmpty)
+    }
+
+    @MainActor
+    func testRiskyActionShowsPendingConfirmationInsteadOfCancelling() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.isRisky }))
+
+        await model.run(actionID: action.id)
+
+        XCTAssertEqual(model.pendingConfirmationAction?.id, action.id)
+        XCTAssertFalse(model.activityFeed.contains { $0.title == "Action Cancelled" })
+    }
+
+    @MainActor
+    func testCompletedActionEnqueuesToastAndFilteredActivityExcludesOlderItems() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let activityEvent = ActivityEvent(
+            timestamp: .now,
+            type: .success,
+            title: "Action Completed",
+            message: "Cache cleanup completed successfully.",
+            symbolName: "checkmark.circle"
+        )
+        let toast = ToastMessage(
+            type: .success,
+            title: "Cleanup Ready",
+            message: "Cache cleanup finished.",
+            summaryLines: ["42 MB reclaimed"]
+        )
+
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(
+                result: ActionExecutionResult(
+                    status: .enabled,
+                    toast: toast,
+                    activityEvent: activityEvent,
+                    debugLog: "cleanup log"
+                )
+            ),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        model.activityFeed = [
+            ActivityItem(
+                event: ActivityEvent(
+                    timestamp: Date(timeIntervalSinceNow: -7_200),
+                    type: .info,
+                    title: "Old Event",
+                    message: "Should be filtered out.",
+                    symbolName: "clock"
+                )
+            ),
+            ActivityItem(
+                event: ActivityEvent(
+                    timestamp: Date(timeIntervalSinceNow: -120),
+                    type: .info,
+                    title: "Recent Event",
+                    message: "Should stay visible.",
+                    symbolName: "clock.badge.checkmark"
+                )
+            )
+        ]
+
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { !$0.isRisky }))
+
+        await model.run(actionID: action.id)
+
+        XCTAssertEqual(model.toasts.first?.title, "Cleanup Ready")
+        XCTAssertEqual(model.toasts.first?.message, "Cache cleanup finished.")
+        XCTAssertEqual(model.activityFeed.first?.title, "Action Completed")
+
+        model.activityFilter = .lastHour
+
+        XCTAssertTrue(model.filteredActivity.contains { $0.title == "Recent Event" })
+        XCTAssertTrue(model.filteredActivity.contains { $0.title == "Action Completed" })
+        XCTAssertFalse(model.filteredActivity.contains { $0.title == "Old Event" })
+    }
+}
+
+@MainActor
+private func makeModel(result: ActionExecutionResult) -> OptimizationDashboardViewModel {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+    return OptimizationDashboardViewModel(
+        engine: MockOptimizationEngine(result: result),
+        stateStore: InMemoryStateStore(),
+        settings: AppSettingsStore(defaults: defaults),
+        systemInfoProvider: MockSystemInfoProvider()
+    )
+}
+
+private struct MockOptimizationEngine: OptimizationExecuting {
+    var result: ActionExecutionResult = ActionExecutionResult(
+        status: .enabled,
+        toast: ToastMessage(type: .success, title: "Done", message: "Action completed."),
+        activityEvent: ActivityEvent(
+            type: .success,
+            title: "Done",
+            message: "Action completed.",
+            symbolName: "checkmark.circle"
+        ),
+        debugLog: "mock output"
+    )
+
+    func execute(_ action: OptimizationAction) async throws -> ActionExecutionResult {
+        result
+    }
+}
+
+private struct MockSystemInfoProvider: SystemInfoProviding {
+    func machineSummary() async -> MachineSummary {
+        MachineSummary(
+            modelName: "MacBook Pro",
+            chipName: "Apple M3",
+            memory: "18 GB",
+            storage: "512 GB",
+            systemVersion: "macOS 15.0",
+            battery: nil,
+            serialNumber: nil
+        )
+    }
+}
+
+private final class InMemoryStateStore: StateStoreProtocol {
+    private(set) var states: [String: FeatureState] = [:]
+
+    func loadStates() throws -> [String: FeatureState] {
+        states
+    }
+
+    func updateState(featureID: String, status: ActionStatus, timestamp: Date) throws {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        states[featureID] = FeatureState(
+            status: status.rawValue.lowercased(),
+            timestamp: formatter.string(from: timestamp)
+        )
+    }
+}

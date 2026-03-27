@@ -1,0 +1,25 @@
+.DS_Store
+
+# Swift Package Manager
+macos-app/.build/
+macos-app/Package.resolved
+
+# Local app outputs
+macos-app/build/
+dist/
+
+# Crash and symbol artifacts
+*.dSYM/
+
+# Temporary icon generation outputs
+*.iconset/
+
+# Local git worktrees
+.worktrees/
+
+# Documentation
+docs/
+
+
+
+
