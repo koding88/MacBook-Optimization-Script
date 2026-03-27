@@ -118,7 +118,7 @@ struct AppLocalizer {
     }
 
     func format(_ key: LocalizedKey, _ arguments: CVarArg...) -> String {
-        String(format: text(key), locale: locale, arguments)
+        String(format: text(key), locale: locale, arguments: arguments)
     }
 
     func inspectionToastMessage(title: String) -> String {

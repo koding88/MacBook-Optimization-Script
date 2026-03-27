@@ -161,10 +161,10 @@ final class OptimizationDashboardViewModel: ObservableObject {
         await run(action)
     }
 
-    func confirmPendingAction() async {
+    func confirmPendingAction() {
         guard let action = pendingConfirmationAction else { return }
         pendingConfirmationAction = nil
-        await run(action)
+        Task { await run(action) }
     }
 
     func cancelPendingAction() {

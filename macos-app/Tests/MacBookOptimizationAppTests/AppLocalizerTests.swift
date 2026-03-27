@@ -43,4 +43,13 @@ final class AppLocalizerTests: XCTestCase {
 
         XCTAssertEqual(localizer.string("missing.localization.key"), "missing.localization.key")
     }
+
+    func testFormattedLocalizationInterpolatesArgumentsCorrectly() {
+        let localizer = AppLocalizer(language: .english)
+
+        XCTAssertEqual(
+            localizer.format(.actionCancelledMessage, "Toggle Power Saving Mode"),
+            "Toggle Power Saving Mode was cancelled before execution."
+        )
+    }
 }

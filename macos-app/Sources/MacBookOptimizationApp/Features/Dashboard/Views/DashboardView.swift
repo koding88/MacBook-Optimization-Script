@@ -33,7 +33,7 @@ struct DashboardView: View {
             )
         ) {
             Button(localizer.text(.continueAction)) {
-                Task { await model.confirmPendingAction() }
+                model.confirmPendingAction()
             }
             Button(localizer.text(.cancel), role: .cancel) {
                 model.cancelPendingAction()
