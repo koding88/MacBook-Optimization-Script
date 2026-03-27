@@ -14,6 +14,11 @@ struct SystemInfoView: View {
         let secondaryValue: String?
     }
 
+    private let gridColumns = [
+        GridItem(.flexible(minimum: 220), spacing: 16, alignment: .top),
+        GridItem(.flexible(minimum: 220), spacing: 16, alignment: .top)
+    ]
+
     var detailRows: [DetailRow] {
         guard let summary else { return [] }
 
@@ -22,7 +27,12 @@ struct SystemInfoView: View {
         ]
 
         if let coreDescription = summary.coreDescription {
-            rows.append(DetailRow(label: localizer.text(.systemLabelCPU), value: coreDescription, secondaryValue: nil))
+            let combinedDetails = [coreDescription, summary.gpuDescription].compactMap { $0 }.joined(separator: " • ")
+            rows[0] = DetailRow(
+                label: localizer.text(.systemLabelChip),
+                value: summary.chipName,
+                secondaryValue: combinedDetails.isEmpty ? nil : combinedDetails
+            )
         }
 
         rows.append(
@@ -60,41 +70,53 @@ struct SystemInfoView: View {
     var body: some View {
         Section {
             if let summary {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 16) {
-                        Image(systemName: "laptopcomputer")
-                            .font(.system(size: 34, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 56, height: 56)
-                            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 18) {
+                    header(summary: summary)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(summary.marketingModel)
-                                .font(.title2)
-                            if summary.marketingModel != summary.modelName {
-                                Text(summary.modelName)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text(summary.systemVersion)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 16) {
+                        specCard(
+                            title: localizer.text(.systemLabelChip),
+                            symbolName: "cpu.fill",
+                            symbolPrimaryColor: .blue,
+                            symbolSecondaryColor: .cyan,
+                            primaryValue: summary.chipName,
+                            secondaryValue: [summary.coreDescription, summary.gpuDescription]
+                                .compactMap { $0 }
+                                .joined(separator: " • ")
+                        )
 
-                    GroupBox {
-                        ForEach(Array(detailRows.enumerated()), id: \.offset) { _, row in
-                            LabeledContent(row.label, value: row.value)
-                            if let secondaryValue = row.secondaryValue {
-                                Text(secondaryValue)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .trailing)
-                            }
-                        }
+                        specCard(
+                            title: localizer.text(.systemLabelMemory),
+                            symbolName: "memorychip.fill",
+                            symbolPrimaryColor: .purple,
+                            symbolSecondaryColor: .pink,
+                            primaryValue: formatter.memorySummary(memoryBytes: summary.memoryBytes)
+                        )
+
+                        storageCard(summary: summary)
+
+                        batteryCard(summary: summary)
+
+                        specCard(
+                            title: localizer.text(.systemLabelDisplay),
+                            symbolName: "display",
+                            symbolPrimaryColor: .indigo,
+                            symbolSecondaryColor: .blue,
+                            primaryValue: summary.displayName,
+                            secondaryValue: summary.displayResolution
+                        )
+
+                        specCard(
+                            title: localizer.text(.systemLabelMacOS),
+                            symbolName: "gearshape.2.fill",
+                            symbolPrimaryColor: .orange,
+                            symbolSecondaryColor: .yellow,
+                            primaryValue: summary.systemVersion,
+                            secondaryValue: nil
+                        )
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
             } else {
                 ProgressView()
                     .controlSize(.small)
@@ -102,5 +124,212 @@ struct SystemInfoView: View {
         } header: {
             Text(localizer.text(.summaryTitle))
         }
+    }
+
+    private func header(summary: MachineSummary) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: "laptopcomputer")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 60, height: 60)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(summary.marketingModel)
+                    .font(.title2.weight(.semibold))
+
+                if summary.marketingModel != summary.modelName {
+                    Text(summary.modelName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(summary.systemVersion)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func specCard(
+        title: String,
+        symbolName: String,
+        symbolPrimaryColor: Color,
+        symbolSecondaryColor: Color,
+        primaryValue: String,
+        secondaryValue: String? = nil
+    ) -> some View {
+        SystemSpecCard(
+            symbolName: symbolName,
+            title: title,
+            symbolPrimaryColor: symbolPrimaryColor,
+            symbolSecondaryColor: symbolSecondaryColor
+        ) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(primaryValue)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                if let secondaryValue, !secondaryValue.isEmpty {
+                    Text(secondaryValue)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func storageCard(summary: MachineSummary) -> some View {
+        let snapshot = summary.storageSnapshot ?? StorageSnapshot(
+            totalBytes: summary.storageTotalBytes,
+            availableBytes: summary.storageAvailableBytes
+        )
+        let totalBytes = max(snapshot.totalBytes, 0)
+        let usedBytes = max(snapshot.availableBytes, 0)
+        let availableBytes = max(totalBytes - usedBytes, 0)
+        let progress = totalBytes > 0 ? Double(usedBytes) / Double(totalBytes) : 0
+
+        return SystemSpecCard(
+            symbolName: "internaldrive.fill",
+            title: localizer.text(.systemLabelStorage),
+            symbolPrimaryColor: .mint,
+            symbolSecondaryColor: .blue
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(formatter.storageSummary(totalBytes: snapshot.totalBytes, availableBytes: snapshot.availableBytes))
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                StorageUsageBar(progress: progress)
+
+                HStack {
+                    Text(byteCountString(availableBytes))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text(byteCountString(usedBytes) + " used")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func batteryCard(summary: MachineSummary) -> some View {
+        let battery = summary.battery
+        let chargeValue = battery.flatMap { batteryPercent(from: $0.chargePercent) }
+        let chargeColor = batteryColor(for: chargeValue)
+
+        return SystemSpecCard(
+            symbolName: "battery.100percent",
+            title: localizer.text(.systemLabelBattery),
+            symbolPrimaryColor: .green,
+            symbolSecondaryColor: .yellow
+        ) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(battery?.chargePercent ?? localizer.text(.unavailable))
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(chargeColor)
+
+                if let condition = battery?.condition, !condition.isEmpty {
+                    Text(condition)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if let powerSource = battery?.powerSource, !powerSource.isEmpty {
+                    Text(powerSource)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(localizer.text(.unavailable))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func byteCountString(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB]
+        formatter.countStyle = .decimal
+        formatter.includesUnit = true
+        formatter.isAdaptive = true
+        return formatter.string(fromByteCount: max(bytes, 0))
+    }
+
+    private func batteryPercent(from value: String) -> Int? {
+        Int(value.replacingOccurrences(of: "%", with: ""))
+    }
+
+    private func batteryColor(for percent: Int?) -> Color {
+        guard let percent else { return .secondary }
+        switch percent {
+        case 60...:
+            return .green
+        case 30..<60:
+            return .orange
+        default:
+            return .red
+        }
+    }
+}
+
+private struct SystemSpecCard<Content: View>: View {
+    let symbolName: String
+    let title: String
+    let symbolPrimaryColor: Color
+    let symbolSecondaryColor: Color
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: symbolName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(symbolPrimaryColor, symbolSecondaryColor)
+                    .frame(width: 30, height: 30)
+                    .background(.quaternary.opacity(0.8), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct StorageUsageBar: View {
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            let clampedProgress = min(max(progress, 0), 1)
+            let usedWidth = max(proxy.size.width * clampedProgress, 0)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.16))
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.accentColor, Color.cyan],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: usedWidth)
+            }
+        }
+        .frame(height: 9)
     }
 }

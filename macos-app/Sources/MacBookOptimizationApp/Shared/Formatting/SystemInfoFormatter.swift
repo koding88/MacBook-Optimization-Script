@@ -10,22 +10,19 @@ struct SystemInfoFormatter {
 
     func memorySummary(memoryBytes: UInt64) -> String {
         guard memoryBytes > 0 else { return localizer.text(.unavailable) }
-        let gigabytes = Int((Double(memoryBytes) / 1_000_000_000).rounded())
-        return "\(gigabytes) GB"
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB]
+        formatter.countStyle = .memory
+        formatter.includesUnit = true
+        formatter.isAdaptive = false
+        formatter.includesCount = true
+        return formatter.string(fromByteCount: Int64(memoryBytes))
     }
 
     func storageSummary(totalBytes: Int64, availableBytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useGB]
-        formatter.countStyle = .decimal
-        formatter.includesUnit = true
-        formatter.isAdaptive = true
-
-        let total = formatter.string(fromByteCount: totalBytes)
-        let available = formatter.string(fromByteCount: availableBytes)
-        let suffix = localizer.string("system.storage.availableSuffix")
-
-        return "\(total) • \(available) \(suffix)"
+        let totalGigabytes = decimalGigabytes(totalBytes)
+        let usedGigabytes = decimalGigabytes(max(availableBytes, 0))
+        return "\(formattedGigabytes(usedGigabytes)) of \(formattedGigabytes(totalGigabytes)) used"
     }
 
     func displaySummary(name: String, resolution: String) -> DisplaySummary {
@@ -33,5 +30,19 @@ struct SystemInfoFormatter {
             primary: name,
             secondary: resolution
         )
+    }
+
+    private func decimalGigabytes(_ bytes: Int64) -> Double {
+        Double(bytes) / 1_000_000_000
+    }
+
+    private func formattedGigabytes(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: localizer.language.rawValue)
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        let number = formatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
+        return "\(number) GB"
     }
 }

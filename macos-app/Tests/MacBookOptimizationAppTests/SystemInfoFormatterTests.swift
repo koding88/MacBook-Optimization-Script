@@ -5,9 +5,9 @@ final class SystemInfoFormatterTests: XCTestCase {
     func testMemorySummaryUsesConciseGigabyteFormat() {
         let formatter = SystemInfoFormatter(localizer: AppLocalizer(language: .english))
 
-        let value = formatter.memorySummary(memoryBytes: 34_000_000_000)
+        let value = formatter.memorySummary(memoryBytes: 34_359_738_368)
 
-        XCTAssertEqual(value, "34 GB")
+        XCTAssertEqual(value, "32 GB")
     }
 
     func testStorageSummaryUsesSingleProjectWideFormat() {
@@ -15,8 +15,7 @@ final class SystemInfoFormatterTests: XCTestCase {
 
         let value = formatter.storageSummary(totalBytes: 494_000_000_000, availableBytes: 167_000_000_000)
 
-        XCTAssertTrue(value.contains("available"))
-        XCTAssertTrue(value.contains("•"))
+        XCTAssertEqual(value, "167.00 GB of 494.00 GB used")
     }
 
     func testDisplaySummaryPrefersShortDescriptorThenResolution() {

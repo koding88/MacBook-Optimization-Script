@@ -20,4 +20,15 @@ final class AppSettingsStoreTests: XCTestCase {
 
         XCTAssertEqual(value, "Every 5 minutes")
     }
+
+    func testRefreshMinutesClampToAllowedPreset() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+
+        let store = AppSettingsStore(defaults: defaults)
+        store.refreshIntervalMinutes = 12
+
+        XCTAssertEqual(store.refreshIntervalMinutes, 10)
+        XCTAssertEqual(store.refreshInterval, .every10Minutes)
+    }
 }

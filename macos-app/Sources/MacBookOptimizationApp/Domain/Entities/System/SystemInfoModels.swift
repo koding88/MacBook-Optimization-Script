@@ -17,6 +17,7 @@ struct MachineSummary: Equatable {
     let marketingModel: String
     let chip: String
     let coreDescription: String?
+    let gpuDescription: String?
     let memoryBytes: UInt64
     let storageTotalBytes: Int64
     let storageAvailableBytes: Int64
@@ -32,6 +33,7 @@ struct MachineSummary: Equatable {
         marketingModel: String,
         chip: String,
         coreDescription: String? = nil,
+        gpuDescription: String? = nil,
         memoryBytes: UInt64,
         storageTotalBytes: Int64,
         storageAvailableBytes: Int64,
@@ -46,6 +48,7 @@ struct MachineSummary: Equatable {
         self.marketingModel = marketingModel
         self.chip = chip
         self.coreDescription = coreDescription
+        self.gpuDescription = gpuDescription
         self.memoryBytes = memoryBytes
         self.storageTotalBytes = storageTotalBytes
         self.storageAvailableBytes = storageAvailableBytes
@@ -72,6 +75,7 @@ struct MachineSummary: Equatable {
             marketingModel: modelName,
             chip: chipName,
             coreDescription: nil,
+            gpuDescription: nil,
             memoryBytes: 0,
             storageTotalBytes: storageSnapshot?.totalBytes ?? 0,
             storageAvailableBytes: storageSnapshot?.availableBytes ?? 0,

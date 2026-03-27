@@ -10,9 +10,10 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
 enum RefreshIntervalOption: String, CaseIterable, Identifiable {
     case manual
-    case every30Seconds
-    case every1Minute
     case every5Minutes
+    case every10Minutes
+    case every30Minutes
+    case every60Minutes
 
     var id: String { rawValue }
 
@@ -20,12 +21,14 @@ enum RefreshIntervalOption: String, CaseIterable, Identifiable {
         switch self {
         case .manual:
             return nil
-        case .every30Seconds:
-            return 30
-        case .every1Minute:
-            return 60
         case .every5Minutes:
             return 300
+        case .every10Minutes:
+            return 600
+        case .every30Minutes:
+            return 1_800
+        case .every60Minutes:
+            return 3_600
         }
     }
 }
@@ -38,6 +41,8 @@ enum RowDensity: String, CaseIterable, Identifiable {
 }
 
 final class AppSettingsStore: ObservableObject {
+    static let allowedRefreshIntervalMinutes = [0, 5, 10, 30, 60]
+
     @Published var language: AppLanguage {
         didSet { defaults.set(language.rawValue, forKey: Keys.language) }
     }
@@ -75,7 +80,7 @@ final class AppSettingsStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        let storedRefreshOption = RefreshIntervalOption(rawValue: defaults.string(forKey: Keys.refreshInterval) ?? "") ?? .every1Minute
+        let storedRefreshOption = RefreshIntervalOption(rawValue: defaults.string(forKey: Keys.refreshInterval) ?? "") ?? .every5Minutes
         let storedRefreshMinutes = defaults.object(forKey: Keys.refreshIntervalMinutes) as? Int
             ?? Self.minutes(for: storedRefreshOption)
 
@@ -106,22 +111,41 @@ final class AppSettingsStore: ObservableObject {
     }
 
     private static func clampedRefreshMinutes(_ minutes: Int) -> Int {
-        min(max(minutes, 0), 60)
+        let allowedMinutes = allowedRefreshIntervalMinutes
+        guard let closest = allowedMinutes.min(by: { abs($0 - minutes) < abs($1 - minutes) }) else {
+            return 0
+        }
+        return closest
     }
 
     private static func minutes(for option: RefreshIntervalOption) -> Int {
         switch option {
         case .manual:
             return 0
-        case .every30Seconds, .every1Minute:
-            return 1
         case .every5Minutes:
             return 5
+        case .every10Minutes:
+            return 10
+        case .every30Minutes:
+            return 30
+        case .every60Minutes:
+            return 60
         }
     }
 
     private static func option(forMinutes minutes: Int) -> RefreshIntervalOption {
-        minutes == 0 ? .manual : (minutes == 1 ? .every1Minute : .every5Minutes)
+        switch clampedRefreshMinutes(minutes) {
+        case 0:
+            return .manual
+        case 5:
+            return .every5Minutes
+        case 10:
+            return .every10Minutes
+        case 30:
+            return .every30Minutes
+        default:
+            return .every60Minutes
+        }
     }
 
     private enum Keys {

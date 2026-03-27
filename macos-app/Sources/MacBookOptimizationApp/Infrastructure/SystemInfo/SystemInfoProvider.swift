@@ -1,16 +1,23 @@
 import Foundation
 import IOKit.ps
 import AppKit
+import CoreGraphics
 
 final class SystemInfoProvider: SystemInfoProviding {
     private let snapshotProvider = SystemSnapshotProvider()
     private let formatter = SystemInfoFormatter(localizer: AppLocalizer(language: .english))
 
+    private struct DisplaySnapshot {
+        let gpuDescription: String?
+        let displayName: String
+        let displayResolution: String
+    }
+
     func machineSummary() async -> MachineSummary {
         let processInfo = ProcessInfo.processInfo
         let systemVersion = processInfo.operatingSystemVersionString
         let storageSnapshot = await snapshotProvider.storageSnapshot()
-        let displaySummary = primaryDisplaySummary()
+        let displaySnapshot = primaryDisplaySnapshot()
         let cpuCount = ProcessInfo.processInfo.processorCount
 
         return MachineSummary(
@@ -18,11 +25,12 @@ final class SystemInfoProvider: SystemInfoProviding {
             marketingModel: sysctlString("hw.model") ?? "Mac",
             chip: sysctlString("machdep.cpu.brand_string") ?? appleSiliconChipName(),
             coreDescription: "\(cpuCount)-core CPU",
+            gpuDescription: displaySnapshot.gpuDescription,
             memoryBytes: processInfo.physicalMemory,
             storageTotalBytes: storageSnapshot.totalBytes,
             storageAvailableBytes: storageSnapshot.availableBytes,
-            displayName: displaySummary.primary,
-            displayResolution: displaySummary.secondary,
+            displayName: displaySnapshot.displayName,
+            displayResolution: displaySnapshot.displayResolution,
             storageSnapshot: storageSnapshot,
             systemVersion: systemVersion,
             battery: batterySummary(),
@@ -48,18 +56,110 @@ final class SystemInfoProvider: SystemInfoProviding {
         return "Unknown"
     }
 
-    private func primaryDisplaySummary() -> DisplaySummary {
+    private func primaryDisplaySnapshot() -> DisplaySnapshot {
+        if let snapshot = primaryDisplaySnapshotFromSystemProfiler() {
+            return snapshot
+        }
+
         guard let screen = NSScreen.screens.first else {
-            return formatter.displaySummary(name: "Built-in Display", resolution: "Unavailable")
+            return DisplaySnapshot(gpuDescription: nil, displayName: "Built-in Display", displayResolution: "Unavailable")
         }
 
         let description = screen.localizedName.isEmpty ? "Built-in Display" : screen.localizedName
-        let size = screen.deviceDescription[NSDeviceDescriptionKey("NSDeviceSize")] as? NSSize ?? screen.frame.size
-        let width = Int(size.width.rounded())
-        let height = Int(size.height.rounded())
+        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+        let mode = displayID.flatMap(CGDisplayCopyDisplayMode)
+        let width = mode.map(\.pixelWidth) ?? Int(screen.frame.width.rounded())
+        let height = mode.map(\.pixelHeight) ?? Int(screen.frame.height.rounded())
         let resolution = width > 0 && height > 0 ? "\(width) × \(height)" : "Unavailable"
 
-        return formatter.displaySummary(name: description, resolution: resolution)
+        return DisplaySnapshot(gpuDescription: nil, displayName: description, displayResolution: resolution)
+    }
+
+    private func primaryDisplaySnapshotFromSystemProfiler() -> DisplaySnapshot? {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
+        task.arguments = ["SPDisplaysDataType", "-json"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard task.terminationStatus == 0 else { return nil }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let displays = json["SPDisplaysDataType"] as? [[String: Any]],
+            let gpuEntry = displays.first
+        else {
+            return nil
+        }
+
+        let gpuDescription = (gpuEntry["sppci_cores"] as? String).map { "\($0)-core GPU" }
+        let displayEntry = (gpuEntry["spdisplays_ndrvs"] as? [[String: Any]])?.first
+        let displayName = normalizedDisplayName(from: displayEntry) ?? "Built-in Display"
+        let resolution = normalizedDisplayResolution(from: displayEntry) ?? "Unavailable"
+
+        return DisplaySnapshot(
+            gpuDescription: gpuDescription,
+            displayName: displayName,
+            displayResolution: resolution
+        )
+    }
+
+    private func normalizedDisplayResolution(from entry: [String: Any]?) -> String? {
+        guard let entry else { return nil }
+
+        if let pixelResolution = entry["spdisplays_pixelresolution"] as? String,
+           let normalized = extractResolution(from: pixelResolution) {
+            let refresh = extractRefreshRate(from: entry["_spdisplays_resolution"] as? String)
+            return [normalized, refresh].compactMap { $0 }.joined(separator: " • ")
+        }
+
+        if let resolution = entry["_spdisplays_pixels"] as? String {
+            let refresh = extractRefreshRate(from: entry["_spdisplays_resolution"] as? String)
+            let normalized = resolution.replacingOccurrences(of: " x ", with: " × ")
+            return [normalized, refresh].compactMap { $0 }.joined(separator: " • ")
+        }
+
+        return nil
+    }
+
+    private func extractResolution(from value: String) -> String? {
+        let numbers = value.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
+        guard numbers.count >= 2 else { return nil }
+        return "\(numbers[0]) × \(numbers[1])"
+    }
+
+    private func extractRefreshRate(from value: String?) -> String? {
+        guard let value else { return nil }
+        let numbers = value.components(separatedBy: CharacterSet(charactersIn: "0123456789.").inverted).filter { !$0.isEmpty }
+        guard let raw = numbers.last, let hz = Double(raw) else { return nil }
+        return hz.rounded(.towardZero) == hz ? "\(Int(hz))Hz" : "\(hz)Hz"
+    }
+
+    private func normalizedDisplayName(from entry: [String: Any]?) -> String? {
+        guard let entry else { return nil }
+
+        if let type = entry["spdisplays_display_type"] as? String {
+            switch type {
+            case "spdisplays_built-in-liquid-retina-xdr":
+                return "Built-in Liquid Retina XDR Display"
+            case "spdisplays_built-in-retina":
+                return "Built-in Retina Display"
+            default:
+                break
+            }
+        }
+
+        return entry["_name"] as? String
     }
 
     private func batterySummary() -> BatterySummary? {

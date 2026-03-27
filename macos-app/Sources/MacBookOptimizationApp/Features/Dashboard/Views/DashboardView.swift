@@ -61,8 +61,10 @@ struct DashboardView: View {
             }
         }
         .sheet(isPresented: $model.isShowingSettings) {
-            SettingsView()
-                .environmentObject(settings)
+            NavigationStack {
+                SettingsView()
+                    .environmentObject(settings)
+            }
         }
     }
 
