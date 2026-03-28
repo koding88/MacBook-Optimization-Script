@@ -84,12 +84,102 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
             systemInfoProvider: MockSystemInfoProvider()
         )
 
-        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.isRisky }))
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.id == "spotlight" }))
 
         await model.run(actionID: action.id)
 
         XCTAssertEqual(model.pendingConfirmationAction?.id, action.id)
         XCTAssertFalse(model.activityFeed.contains { $0.title == "Action Cancelled" })
+    }
+
+    @MainActor
+    func testSystemActionShowsStepReviewBeforeExecution() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let engine = RecordingOptimizationEngine()
+        let model = OptimizationDashboardViewModel(
+            engine: engine,
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        await model.run(actionID: "system_performance")
+
+        XCTAssertEqual(model.pendingSystemActionReview?.action.id, "system_performance")
+        XCTAssertEqual(model.pendingSystemActionReview?.selectedCount, model.pendingSystemActionReview?.steps.count)
+        XCTAssertNil(engine.lastAction)
+    }
+
+    @MainActor
+    func testNetworkActionShowsStepReviewBeforeExecution() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let engine = RecordingOptimizationEngine()
+        let model = OptimizationDashboardViewModel(
+            engine: engine,
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        await model.run(actionID: "network_optimization")
+
+        XCTAssertEqual(model.pendingSystemActionReview?.action.id, "network_optimization")
+        XCTAssertEqual(model.pendingSystemActionReview?.selectedCount, model.pendingSystemActionReview?.steps.count)
+        XCTAssertNil(engine.lastAction)
+    }
+
+    @MainActor
+    func testSystemActionReviewUsesCurrentAppLanguage() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+        defaults.set("vi", forKey: "app.language")
+
+        let model = OptimizationDashboardViewModel(
+            engine: RecordingOptimizationEngine(),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        await model.run(actionID: "system_performance")
+
+        XCTAssertEqual(model.pendingSystemActionReview?.steps.first?.title, "Tăng hàng đợi kết nối")
+    }
+
+    @MainActor
+    func testConfirmSystemActionReviewRunsOnlySelectedSteps() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let engine = RecordingOptimizationEngine()
+        let model = OptimizationDashboardViewModel(
+            engine: engine,
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        await model.run(actionID: "system_performance")
+        let review = try! XCTUnwrap(model.pendingSystemActionReview)
+        let stepToDisable = review.steps[1].id
+
+        model.toggleSystemActionReviewStep(id: stepToDisable)
+        model.confirmSystemActionReview()
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        let executed = try! XCTUnwrap(engine.lastAction)
+        let requests = try! XCTUnwrap(executed.kind.commandRequests)
+        XCTAssertEqual(requests.count, review.steps.count - 1)
+        XCTAssertFalse(requests.contains(review.steps[1].request))
     }
 
     @MainActor
@@ -112,7 +202,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
             systemInfoProvider: MockSystemInfoProvider()
         )
 
-        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.isRisky }))
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.id == "spotlight" }))
 
         await model.run(actionID: action.id)
         model.confirmPendingAction()
@@ -137,11 +227,11 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
             systemInfoProvider: MockSystemInfoProvider()
         )
 
-        let action: OptimizationAction = try! XCTUnwrap(
-            model.actions.first(where: { $0.kind.requiresAdministratorForTesting })
-        )
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.id == "dns_flush" }))
 
         await model.run(actionID: action.id)
+        model.confirmSystemActionReview()
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertTrue(model.toasts.contains { $0.title == "Waiting for Password" })
         XCTAssertTrue(model.activityFeed.contains { $0.title == "Administrator Approval Needed" })
@@ -160,11 +250,11 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
             systemInfoProvider: MockSystemInfoProvider()
         )
 
-        let action: OptimizationAction = try! XCTUnwrap(
-            model.actions.first(where: { $0.kind.requiresAdministratorForTesting })
-        )
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.id == "dns_flush" }))
 
         await model.run(actionID: action.id)
+        model.confirmSystemActionReview()
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         let updatedAction = try! XCTUnwrap(model.actions.first(where: { $0.id == action.id }))
         XCTAssertEqual(updatedAction.status, .ready)
@@ -227,7 +317,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
             )
         ]
 
-        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { !$0.isRisky }))
+        let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.id == "dashboard" }))
 
         await model.run(actionID: action.id)
 
@@ -279,6 +369,26 @@ private struct MockOptimizationEngine: OptimizationExecuting {
     }
 }
 
+@MainActor
+private final class RecordingOptimizationEngine: OptimizationExecuting {
+    var lastAction: OptimizationAction?
+
+    func execute(_ action: OptimizationAction) async throws -> ActionExecutionResult {
+        lastAction = action
+        return ActionExecutionResult(
+            status: .enabled,
+            toast: ToastMessage(type: .success, title: "Done", message: "Action completed."),
+            activityEvent: ActivityEvent(
+                type: .success,
+                title: "Done",
+                message: "Action completed.",
+                symbolName: "checkmark.circle"
+            ),
+            debugLog: "recorded"
+        )
+    }
+}
+
 private struct MockSystemInfoProvider: SystemInfoProviding {
     func machineSummary() async -> MachineSummary {
         MachineSummary(
@@ -290,19 +400,6 @@ private struct MockSystemInfoProvider: SystemInfoProviding {
             battery: nil,
             serialNumber: nil
         )
-    }
-}
-
-private extension ActionKind {
-    var requiresAdministratorForTesting: Bool {
-        switch self {
-        case .command(let commands):
-            return commands.contains(where: \.requiresAdministrator)
-        case .dynamic:
-            return true
-        case .manual, .statuses:
-            return false
-        }
     }
 }
 

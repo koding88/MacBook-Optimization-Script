@@ -55,6 +55,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
     @Published var machineSummary: MachineSummary?
     @Published var debugOutput = ""
     @Published var isRunningActionID: String?
+    @Published var pendingSystemActionReview: SystemActionReviewPlan?
     @Published var pendingConfirmationAction: OptimizationAction?
     @Published var isShowingSettings = false
     @Published var toasts: [ToastMessage] = []
@@ -73,9 +74,12 @@ final class OptimizationDashboardViewModel: ObservableObject {
     private let stateStore: StateStoreProtocol
     private let settings: AppSettingsStore
     private let systemInfoProvider: SystemInfoProviding
-    private let localizer: AppLocalizer
     private var cancellables: Set<AnyCancellable> = []
     private var refreshTask: Task<Void, Never>?
+
+    private var localizer: AppLocalizer {
+        AppLocalizer(language: settings.language)
+    }
 
     init(
         engine: OptimizationExecuting = OptimizationEngine(
@@ -90,7 +94,6 @@ final class OptimizationDashboardViewModel: ObservableObject {
         self.stateStore = stateStore
         self.settings = settings
         self.systemInfoProvider = systemInfoProvider
-        self.localizer = AppLocalizer(language: settings.language)
         self.actions = OptimizationCatalog.actions()
         loadStatusesFromDisk()
         setupBindings()
@@ -153,6 +156,11 @@ final class OptimizationDashboardViewModel: ObservableObject {
     func run(actionID: String) async {
         guard let action = actions.first(where: { $0.id == actionID }), isRunningActionID == nil else { return }
 
+        if let review = SystemActionReviewPlan.build(for: action, localizer: localizer) {
+            pendingSystemActionReview = review
+            return
+        }
+
         if settings.confirmPrivilegedActions && (action.isRisky || action.kind.requiresAdministrator) {
             pendingConfirmationAction = action
             return
@@ -164,6 +172,45 @@ final class OptimizationDashboardViewModel: ObservableObject {
     func confirmPendingAction() {
         guard let action = pendingConfirmationAction else { return }
         pendingConfirmationAction = nil
+        Task { await run(action) }
+    }
+
+    func cancelSystemActionReview() {
+        pendingSystemActionReview = nil
+    }
+
+    func toggleSystemActionReviewStep(id: SystemActionReviewStep.ID) {
+        guard var review = pendingSystemActionReview else { return }
+        if review.selectedStepIDs.contains(id) {
+            review.selectedStepIDs.remove(id)
+        } else {
+            review.selectedStepIDs.insert(id)
+        }
+        pendingSystemActionReview = review
+    }
+
+    func selectAllSystemActionReviewSteps() {
+        guard var review = pendingSystemActionReview else { return }
+        review.selectedStepIDs = Set(review.steps.map(\.id))
+        pendingSystemActionReview = review
+    }
+
+    func clearSystemActionReviewSteps() {
+        guard var review = pendingSystemActionReview else { return }
+        review.selectedStepIDs.removeAll()
+        pendingSystemActionReview = review
+    }
+
+    func confirmSystemActionReview() {
+        guard let review = pendingSystemActionReview, review.hasSelection else { return }
+        let action = review.action.replacing(commandRequests: review.selectedRequests)
+        pendingSystemActionReview = nil
+
+        if settings.confirmPrivilegedActions && (action.isRisky || action.kind.requiresAdministrator) {
+            pendingConfirmationAction = action
+            return
+        }
+
         Task { await run(action) }
     }
 
@@ -373,19 +420,6 @@ final class OptimizationDashboardViewModel: ObservableObject {
                 guard !Task.isCancelled else { break }
                 await self?.refreshStatuses()
             }
-        }
-    }
-}
-
-private extension ActionKind {
-    var requiresAdministrator: Bool {
-        switch self {
-        case .command(let commands):
-            return commands.contains(where: \.requiresAdministrator)
-        case .dynamic:
-            return true
-        case .manual, .statuses:
-            return false
         }
     }
 }

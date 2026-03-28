@@ -60,6 +60,23 @@ struct OptimizationAction: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
+
+    func replacing(commandRequests: [CommandRequest]) -> OptimizationAction {
+        OptimizationAction(
+            id: id,
+            titleKey: titleKey,
+            descriptionKey: descriptionKey,
+            category: category,
+            symbolName: symbolName,
+            statusFeatureID: statusFeatureID,
+            isRisky: isRisky,
+            estimatedTime: estimatedTime,
+            requiresRestart: requiresRestart,
+            kind: .command(commandRequests),
+            status: status,
+            lastRunDescription: lastRunDescription
+        )
+    }
 }
 
 struct FeatureState {
@@ -182,4 +199,22 @@ struct ActionExecutionResult {
 struct SystemContext {
     let commandExecutor: SystemCommandExecuting
     let stateStore: StateStoreProtocol
+}
+
+extension ActionKind {
+    var requiresAdministrator: Bool {
+        switch self {
+        case .command(let commands):
+            return commands.contains(where: \.requiresAdministrator)
+        case .dynamic:
+            return true
+        case .manual, .statuses:
+            return false
+        }
+    }
+
+    var commandRequests: [CommandRequest]? {
+        guard case .command(let commands) = self else { return nil }
+        return commands
+    }
 }

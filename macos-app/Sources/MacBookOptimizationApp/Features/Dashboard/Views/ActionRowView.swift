@@ -92,16 +92,3 @@ struct ActionRowView: View {
         }
     }
 }
-
-private extension ActionKind {
-    var requiresAdministrator: Bool {
-        switch self {
-        case .command(let commands):
-            return commands.contains(where: \.requiresAdministrator)
-        case .dynamic:
-            return true
-        case .manual, .statuses:
-            return false
-        }
-    }
-}

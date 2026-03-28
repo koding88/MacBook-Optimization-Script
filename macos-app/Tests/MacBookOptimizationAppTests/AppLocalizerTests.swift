@@ -52,4 +52,28 @@ final class AppLocalizerTests: XCTestCase {
             "Toggle Power Saving Mode was cancelled before execution."
         )
     }
+
+    func testSystemReviewPlanUsesLocalizedStepCopy() {
+        let english = AppLocalizer(language: .english)
+        let vietnamese = AppLocalizer(language: .vietnamese)
+        let action = try! XCTUnwrap(OptimizationCatalog.actions().first(where: { $0.id == "system_performance" }))
+
+        let englishPlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: english))
+        let vietnamesePlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: vietnamese))
+
+        XCTAssertEqual(englishPlan.steps.first?.title, "Increase socket backlog")
+        XCTAssertEqual(vietnamesePlan.steps.first?.title, "Tăng hàng đợi kết nối")
+    }
+
+    func testNetworkReviewPlanUsesLocalizedStepCopy() {
+        let english = AppLocalizer(language: .english)
+        let vietnamese = AppLocalizer(language: .vietnamese)
+        let action = try! XCTUnwrap(OptimizationCatalog.actions().first(where: { $0.id == "network_optimization" }))
+
+        let englishPlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: english))
+        let vietnamesePlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: vietnamese))
+
+        XCTAssertEqual(englishPlan.steps.first?.title, "Disable delayed ACK")
+        XCTAssertEqual(vietnamesePlan.steps.first?.title, "Tắt delayed ACK")
+    }
 }
