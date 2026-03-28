@@ -190,6 +190,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
     }
 
     private func run(_ action: OptimizationAction) async {
+        let previousStatus = action.status
         updateStatus(for: action.id, to: .running)
         appendActivity(
             title: localizer.text(.runningActionTitle),
@@ -197,6 +198,24 @@ final class OptimizationDashboardViewModel: ObservableObject {
             kind: .info,
             symbolName: "play.circle"
         )
+
+        if action.kind.requiresAdministrator {
+            let actionTitle = localizer.string(action.titleKey)
+            enqueueToast(
+                ToastMessage(
+                    type: .info,
+                    title: localizer.text(.privilegedPromptToastTitle),
+                    message: localizer.format(.privilegedPromptToastMessage, actionTitle),
+                    dismissAfter: 4
+                )
+            )
+            appendActivity(
+                title: localizer.text(.privilegedPromptTitle),
+                message: localizer.format(.privilegedPromptMessage, actionTitle),
+                kind: .info,
+                symbolName: "key.horizontal"
+            )
+        }
 
         do {
             let result = try await engine.execute(action)
@@ -207,13 +226,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
             appendActivity(event: result.activityEvent)
         } catch {
             debugOutput = error.localizedDescription
-            updateStatus(for: action.id, to: .failed)
-            appendActivity(
-                title: localizer.text(.actionFailedTitle),
-                message: localizer.format(.actionFailedMessage, localizer.string(action.titleKey)),
-                kind: .failure,
-                symbolName: "xmark.octagon"
-            )
+            handleExecutionError(error, for: action, previousStatus: previousStatus)
         }
     }
 
@@ -243,6 +256,65 @@ final class OptimizationDashboardViewModel: ObservableObject {
     private func enqueueToast(_ toast: ToastMessage) {
         toasts.insert(toast, at: 0)
         toasts = Array(toasts.prefix(5))
+    }
+
+    private func handleExecutionError(_ error: Error, for action: OptimizationAction, previousStatus: ActionStatus) {
+        let actionTitle = localizer.string(action.titleKey)
+
+        if let systemError = error as? SystemCommandExecutorError {
+            switch systemError {
+            case .administratorAuthorizationCancelled:
+                updateStatus(for: action.id, to: previousStatus)
+                enqueueToast(
+                    ToastMessage(
+                        type: .warning,
+                        title: localizer.text(.administratorCancelledTitle),
+                        message: localizer.format(.administratorCancelledMessage, actionTitle),
+                        dismissAfter: 4
+                    )
+                )
+                appendActivity(
+                    title: localizer.text(.administratorCancelledTitle),
+                    message: localizer.format(.administratorCancelledMessage, actionTitle),
+                    kind: .warning,
+                    symbolName: "xmark.shield"
+                )
+                return
+            case .administratorExecutionFailed:
+                updateStatus(for: action.id, to: .failed)
+                enqueueToast(
+                    ToastMessage(
+                        type: .error,
+                        title: localizer.text(.actionFailedTitle),
+                        message: localizer.format(.actionFailedAdministratorMessage, actionTitle)
+                    )
+                )
+                appendActivity(
+                    title: localizer.text(.actionFailedTitle),
+                    message: localizer.format(.actionFailedAdministratorMessage, actionTitle),
+                    kind: .failure,
+                    symbolName: "xmark.octagon"
+                )
+                return
+            case .invalidCommand:
+                break
+            }
+        }
+
+        updateStatus(for: action.id, to: .failed)
+        enqueueToast(
+            ToastMessage(
+                type: .error,
+                title: localizer.text(.actionFailedTitle),
+                message: localizer.format(.actionFailedMessage, actionTitle)
+            )
+        )
+        appendActivity(
+            title: localizer.text(.actionFailedTitle),
+            message: localizer.format(.actionFailedMessage, actionTitle),
+            kind: .failure,
+            symbolName: "xmark.octagon"
+        )
     }
 
     private func loadStatusesFromDisk() {
