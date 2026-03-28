@@ -2,12 +2,15 @@ import Foundation
 
 enum SystemCommandExecutorError: LocalizedError {
     case invalidCommand(String)
+    case administratorAuthorizationCancelled
     case administratorExecutionFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidCommand(let command):
             return "Khong the phan tich command: \(command)"
+        case .administratorAuthorizationCancelled:
+            return "Administrator authorization was cancelled."
         case .administratorExecutionFailed(let message):
             return message
         }
@@ -57,12 +60,25 @@ final class SystemCommandExecutor: SystemCommandExecuting {
         process.waitUntilExit()
 
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(decoding: data, as: UTF8.self)
+        let output = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
 
         if process.terminationStatus != 0 {
-            throw SystemCommandExecutorError.administratorExecutionFailed(output.isEmpty ? "Thuc thi administrator command that bai." : output)
+            if Self.isUserCancelledAdministratorPrompt(output) {
+                throw SystemCommandExecutorError.administratorAuthorizationCancelled
+            }
+
+            throw SystemCommandExecutorError.administratorExecutionFailed(
+                output.isEmpty ? "Administrator command failed." : output
+            )
         }
 
         return CommandExecutionResult(output: output, exitCode: process.terminationStatus)
+    }
+
+    static func isUserCancelledAdministratorPrompt(_ output: String) -> Bool {
+        let normalized = output.lowercased()
+        return normalized.contains("user canceled")
+            || normalized.contains("user cancelled")
+            || normalized.contains("(-128)")
     }
 }

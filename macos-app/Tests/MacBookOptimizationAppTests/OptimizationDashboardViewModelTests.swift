@@ -125,6 +125,54 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testPrivilegedActionShowsPasswordPromptGuidanceBeforeExecution() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        let action: OptimizationAction = try! XCTUnwrap(
+            model.actions.first(where: { $0.kind.requiresAdministratorForTesting })
+        )
+
+        await model.run(actionID: action.id)
+
+        XCTAssertTrue(model.toasts.contains { $0.title == "Waiting for Password" })
+        XCTAssertTrue(model.activityFeed.contains { $0.title == "Administrator Approval Needed" })
+    }
+
+    @MainActor
+    func testAdministratorPromptCancellationRestoresPreviousStatusAndShowsWarning() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(error: SystemCommandExecutorError.administratorAuthorizationCancelled),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        let action: OptimizationAction = try! XCTUnwrap(
+            model.actions.first(where: { $0.kind.requiresAdministratorForTesting })
+        )
+
+        await model.run(actionID: action.id)
+
+        let updatedAction = try! XCTUnwrap(model.actions.first(where: { $0.id == action.id }))
+        XCTAssertEqual(updatedAction.status, .ready)
+        XCTAssertEqual(model.activityFeed.first?.title, "Administrator Prompt Cancelled")
+        XCTAssertEqual(model.toasts.first?.type, .warning)
+    }
+
+    @MainActor
     func testCompletedActionEnqueuesToastAndFilteredActivityExcludesOlderItems() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
@@ -221,9 +269,13 @@ private struct MockOptimizationEngine: OptimizationExecuting {
         ),
         debugLog: "mock output"
     )
+    var error: Error?
 
     func execute(_ action: OptimizationAction) async throws -> ActionExecutionResult {
-        result
+        if let error {
+            throw error
+        }
+        return result
     }
 }
 
@@ -238,6 +290,19 @@ private struct MockSystemInfoProvider: SystemInfoProviding {
             battery: nil,
             serialNumber: nil
         )
+    }
+}
+
+private extension ActionKind {
+    var requiresAdministratorForTesting: Bool {
+        switch self {
+        case .command(let commands):
+            return commands.contains(where: \.requiresAdministrator)
+        case .dynamic:
+            return true
+        case .manual, .statuses:
+            return false
+        }
     }
 }
 

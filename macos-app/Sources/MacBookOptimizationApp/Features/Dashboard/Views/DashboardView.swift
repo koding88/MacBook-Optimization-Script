@@ -40,7 +40,7 @@ struct DashboardView: View {
             }
         } message: {
             if let action = model.pendingConfirmationAction {
-                Text("\(localizer.string(action.titleKey)). \(localizer.text(.confirmRiskyMessage))")
+                Text(confirmationMessage(for: action))
             }
         }
         .toolbar {
@@ -66,6 +66,12 @@ struct DashboardView: View {
                     .environmentObject(settings)
             }
         }
+    }
+
+    private func confirmationMessage(for action: OptimizationAction) -> String {
+        let base = "\(localizer.string(action.titleKey)). \(localizer.text(.confirmRiskyMessage))"
+        guard action.requiresAdministratorForDialog else { return base }
+        return "\(base) \(localizer.format(.privilegedPromptMessage, localizer.string(action.titleKey)))"
     }
 
     private var sidebar: some View {
@@ -160,5 +166,18 @@ struct DashboardView: View {
             }
         }
         .listStyle(.inset)
+    }
+}
+
+private extension OptimizationAction {
+    var requiresAdministratorForDialog: Bool {
+        switch kind {
+        case .command(let commands):
+            return commands.contains(where: \.requiresAdministrator)
+        case .dynamic:
+            return true
+        case .manual, .statuses:
+            return false
+        }
     }
 }
