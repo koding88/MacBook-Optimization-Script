@@ -4,6 +4,8 @@ struct ActivityFeedView: View {
     let localizer: AppLocalizer
     @Binding var filter: OptimizationDashboardViewModel.ActivityTimeFilter
     let items: [ActivityItem]
+    let onDelete: (ActivityItem.ID) -> Void
+    let onClearAll: () -> Void
 
     var body: some View {
         List {
@@ -51,6 +53,17 @@ struct ActivityFeedView: View {
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
                             }
+
+                            Spacer(minLength: 8)
+
+                            Button(role: .destructive) {
+                                onDelete(item.id)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .buttonStyle(.plain)
+                            .help(localizer.text(.activityDelete))
                         }
                         .padding(.vertical, 8)
                     }
@@ -70,6 +83,13 @@ struct ActivityFeedView: View {
                 .labelsHidden()
                 .controlSize(.small)
                 .help(localizer.text(.activityFilterHelp))
+            }
+
+            ToolbarItem {
+                Button(localizer.text(.activityClearAll)) {
+                    onClearAll()
+                }
+                .disabled(items.isEmpty)
             }
         }
     }

@@ -145,6 +145,8 @@ final class OptimizationEngine: OptimizationExecuting {
             return diskInspectionPresentation(output: output)
         case "system_check_network":
             return networkInspectionPresentation(output: output)
+        case "mdm_status":
+            return mdmInspectionPresentation(output: output)
         default:
             return nil
         }
@@ -307,6 +309,39 @@ final class OptimizationEngine: OptimizationExecuting {
                 secondaryValues: secondaryValues
             ),
             symbolName: "network"
+        )
+    }
+
+    private func mdmInspectionPresentation(output: String) -> InspectionPresentation? {
+        let normalized = output.lowercased()
+        let enrollmentStatus: String
+
+        if normalized.contains("mdm enrollment: yes")
+            || normalized.contains("enrolled via dep: yes")
+            || normalized.contains("enrollment status: enrolled") {
+            enrollmentStatus = "Enrolled"
+        } else if normalized.contains("mdm enrollment: no")
+            || normalized.contains("enrolled via dep: no")
+            || normalized.contains("not enrolled")
+            || normalized.contains("no enrollment information")
+            || normalized.contains("unable to determine enrollment status") {
+            enrollmentStatus = "Not enrolled"
+        } else {
+            enrollmentStatus = "Needs review"
+        }
+
+        let advisory = normalized.contains("no mdm-related host overrides found")
+            ? "No host overrides detected"
+            : (normalized.contains("hosts advisory entries") ? "Hosts overrides detected" : "Hosts advisory unavailable")
+
+        return InspectionPresentation(
+            summary: ActionResultSummary(
+                primaryValue: enrollmentStatus,
+                secondaryValues: [
+                    .init(labelKey: .snapshotMDMHostsAdvisory, value: advisory)
+                ]
+            ),
+            symbolName: "building.2.crop.circle"
         )
     }
 

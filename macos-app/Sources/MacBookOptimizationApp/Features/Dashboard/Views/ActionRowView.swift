@@ -4,6 +4,7 @@ struct ActionRowMetrics {
     static let `default` = ActionRowMetrics()
 
     let buttonWidth: CGFloat = 72
+    let restoreButtonWidth: CGFloat = 88
     let minimumRowHeight: CGFloat = 86
 }
 
@@ -12,9 +13,11 @@ struct ActionRowView: View {
     let isRunning: Bool
     let isAvailable: Bool
     let availabilityMessage: String?
+    let restoreMessage: String?
     let localizer: AppLocalizer
     let density: RowDensity
     let runAction: () -> Void
+    let restoreAction: () -> Void
 
     @State private var isHovering = false
     private let metrics = ActionRowMetrics.default
@@ -76,25 +79,41 @@ struct ActionRowView: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+
+                if let restoreMessage, availabilityMessage == nil {
+                    Text(restoreMessage)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer(minLength: 12)
 
-            Button(action: runAction) {
-                ZStack {
-                    Text(localizer.text(.run))
-                        .opacity(isRunning ? 0 : 1)
-
-                    if isRunning {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
+            HStack(spacing: 10) {
+                Button(localizer.text(.restoreButton)) {
+                    restoreAction()
                 }
-                .frame(width: metrics.buttonWidth)
+                .frame(width: metrics.restoreButtonWidth)
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .disabled(isRunning || restoreMessage != nil)
+
+                Button(action: runAction) {
+                    ZStack {
+                        Text(localizer.text(.run))
+                            .opacity(isRunning ? 0 : 1)
+
+                        if isRunning {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                    .frame(width: metrics.buttonWidth)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .disabled(isRunning || !isAvailable)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
-            .disabled(isRunning || !isAvailable)
         }
         .padding(.vertical, density == .comfortable ? 10 : 6)
         .frame(minHeight: metrics.minimumRowHeight, alignment: .center)
