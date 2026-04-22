@@ -8,6 +8,40 @@ struct ActionResultSheet: View {
 
     @State private var isShowingDetails = false
 
+    private var detailLineCount: Int {
+        visibleDetails?.split(whereSeparator: \.isNewline).count ?? 0
+    }
+
+    private var sheetWidth: CGFloat {
+        if result.summary == nil && detailLineCount <= 3 {
+            return 500
+        }
+        if detailLineCount >= 10 || result.summary != nil {
+            return 660
+        }
+        return 560
+    }
+
+    private var sheetHeight: CGFloat {
+        if result.summary == nil && detailLineCount <= 3 {
+            return 240
+        }
+        if detailLineCount >= 10 {
+            return 460
+        }
+        return 340
+    }
+
+    private var terminalHeight: CGFloat {
+        if detailLineCount >= 12 {
+            return 280
+        }
+        if detailLineCount >= 6 {
+            return 220
+        }
+        return 160
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             header
@@ -52,7 +86,7 @@ struct ActionResultSheet: View {
                     detailsPanel(details)
                 } else {
                     DisclosureGroup(localizer.text(.resultDialogDetailsTitle), isExpanded: $isShowingDetails) {
-                        detailsScrollView(details)
+                        detailsTerminal(details)
                             .padding(.top, 12)
                     }
                     .controlSize(.large)
@@ -70,7 +104,8 @@ struct ActionResultSheet: View {
             }
         }
         .padding(24)
-        .frame(minWidth: 560, minHeight: 320)
+        .frame(width: sheetWidth)
+        .frame(minHeight: sheetHeight)
     }
 
     private var header: some View {
@@ -103,23 +138,23 @@ struct ActionResultSheet: View {
     }
 
     private func detailsPanel(_ details: String) -> some View {
-        GroupBox {
-            detailsScrollView(details)
-                .padding(16)
-        } label: {
+        VStack(alignment: .leading, spacing: 12) {
             Text(localizer.text(.resultDialogDetailsTitle))
                 .font(.headline)
+
+            detailsTerminal(details)
         }
     }
 
-    private func detailsScrollView(_ details: String) -> some View {
-        ScrollView {
-            Text(details)
-                .font(.system(.caption, design: .monospaced))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-        }
-        .frame(minHeight: 140, maxHeight: 240)
+    private func detailsTerminal(_ details: String) -> some View {
+        TerminalSurfaceView(
+            title: result.title,
+            output: details,
+            emptyMessage: localizer.text(.noOutputYet),
+            animateKey: result.id.uuidString,
+            minHeight: terminalHeight,
+            maxHeight: terminalHeight
+        )
     }
 
     private var tintColor: Color {

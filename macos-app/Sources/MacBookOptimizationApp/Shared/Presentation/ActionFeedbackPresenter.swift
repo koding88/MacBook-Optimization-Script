@@ -55,7 +55,7 @@ struct ActionFeedbackPresenter: ActionFeedbackPresenting {
                 type: toastType,
                 title: title,
                 message: message,
-                dismissAfter: isFailure ? nil : 3
+                dismissAfter: isFailure ? 7 : 3
             ),
             activityEvent: ActivityEvent(
                 type: activityType,

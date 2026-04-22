@@ -18,10 +18,14 @@ struct SystemActionReviewSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(localizer.text(.systemReviewTitle))
+                Text(currentReview.mode == .run ? localizer.text(.systemReviewTitle) : localizer.string(currentReview.action.titleKey))
                     .font(.title2.weight(.semibold))
 
-                Text(localizer.format(.systemReviewMessage, localizer.string(currentReview.action.titleKey)))
+                Text(
+                    currentReview.mode == .run
+                        ? localizer.format(.systemReviewMessage, localizer.string(currentReview.action.titleKey))
+                        : localizer.text(.restoreReviewMessage)
+                )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -86,7 +90,7 @@ struct SystemActionReviewSheet: View {
                     model.cancelSystemActionReview()
                 }
 
-                Button(localizer.text(.systemReviewRunSelected)) {
+                Button(localizer.text(currentReview.runButtonTitleKey)) {
                     model.confirmSystemActionReview()
                 }
                 .buttonStyle(.borderedProminent)
