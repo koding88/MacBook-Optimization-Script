@@ -111,6 +111,14 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
             return memorySnapshotDescriptor(for: request.command, localizer: localizer)
         case "system_check_battery":
             return batterySnapshotDescriptor(for: request.command, localizer: localizer)
+        case "system_check_gpu":
+            return gpuSnapshotDescriptor(for: request.command, localizer: localizer)
+        case "system_check_disk":
+            return diskSnapshotDescriptor(for: request.command, localizer: localizer)
+        case "system_check_network":
+            return networkSnapshotDescriptor(for: request.command, localizer: localizer)
+        case "system_check_thermal":
+            return thermalSnapshotDescriptor(for: request.command, localizer: localizer)
         default:
             return (
                 title: localizer.format(.systemReviewStepFallbackTitle, stepIndex + 1),
@@ -412,6 +420,42 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
             return localized("system.review.monitoring.battery.healthDetails", localizer: localizer)
         default:
             return localized("system.review.monitoring.battery.fallback", localizer: localizer)
+        }
+    }
+
+    private static func gpuSnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "system_profiler SPDisplaysDataType | awk -F': ' '/Chipset Model/{print \"GPU Model: \"$2} /Metal Support/{print \"Metal Support: \"$2; exit}'":
+            return localized("system.review.monitoring.gpu.displayProfile", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.gpu.fallback", localizer: localizer)
+        }
+    }
+
+    private static func diskSnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "df -h / | tail -n 1 | awk '{print \"Disk Used: \"$3\" of \"$2\" (\"$5\" used)\"; print \"Disk Available: \"$4; print \"Mount Point: \"$9}'":
+            return localized("system.review.monitoring.disk.rootVolume", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.disk.fallback", localizer: localizer)
+        }
+    }
+
+    private static func networkSnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "iface=\"$(route get default 2>/dev/null | awk '/interface:/{print $2; exit}')\"; gateway=\"$(route get default 2>/dev/null | awk '/gateway:/{print $2; exit}')\"; if [ -n \"$iface\" ]; then printf 'Active Interface: %s\\n' \"$iface\"; [ -n \"$gateway\" ] && printf 'Gateway: %s\\n' \"$gateway\"; networksetup -listallhardwareports 2>/dev/null | awk -v target=\"$iface\" '$0 ~ /^Hardware Port:/ { port=substr($0, index($0, \":\") + 2) } $0 ~ /^Device:/ && $2 == target { print \"Hardware Port: \" port; exit }'; else printf 'Active Interface: Unavailable\\n'; fi":
+            return localized("system.review.monitoring.network.defaultRoute", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.network.fallback", localizer: localizer)
+        }
+    }
+
+    private static func thermalSnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "pmset -g therm 2>/dev/null || printf 'Thermal diagnostics are unavailable on this Mac.\\n'":
+            return localized("system.review.monitoring.thermal.pressureSnapshot", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.thermal.fallback", localizer: localizer)
         }
     }
 

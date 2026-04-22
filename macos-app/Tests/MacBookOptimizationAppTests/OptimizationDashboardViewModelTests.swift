@@ -323,6 +323,35 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAutoBootIsBlockedOnAppleSilicon() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let engine = RecordingOptimizationEngine()
+        let model = OptimizationDashboardViewModel(
+            engine: engine,
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: defaults),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        model.machineSummary = await MockSystemInfoProvider().machineSummary()
+        let action = try! XCTUnwrap(model.actions.first(where: { $0.id == "autoboot" }))
+
+        XCTAssertFalse(model.isActionAvailable(action))
+        XCTAssertEqual(model.unavailableMessage(for: action), "This action is unavailable on Apple Silicon Macs.")
+
+        await model.run(actionID: "autoboot")
+
+        XCTAssertNil(engine.lastAction)
+        XCTAssertNil(model.pendingConfirmationAction)
+        XCTAssertEqual(model.presentedActionResult?.kind, .warning)
+        XCTAssertEqual(model.presentedActionResult?.message, "This action is only available on Intel-based Macs.")
+        XCTAssertEqual(model.toasts.first?.title, "Action Unavailable")
+    }
+
+    @MainActor
     func testCompletedActionEnqueuesToastAndFilteredActivityExcludesOlderItems() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
@@ -393,6 +422,25 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         XCTAssertTrue(model.filteredActivity.contains { $0.title == "Recent Event" })
         XCTAssertTrue(model.filteredActivity.contains { $0.title == "Action Completed" })
         XCTAssertFalse(model.filteredActivity.contains { $0.title == "Old Event" })
+    }
+
+    @MainActor
+    func testResetStoredStatusesClearsTrackedStatesAndShowsFeedback() throws {
+        let stateStore = InMemoryStateStore()
+        try stateStore.updateState(featureID: "dns_flush", status: .enabled, timestamp: .now)
+
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: stateStore,
+            settings: AppSettingsStore(defaults: UserDefaults(suiteName: #function)!),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        model.resetStoredStatuses()
+
+        XCTAssertTrue(try stateStore.loadStates().isEmpty)
+        XCTAssertEqual(model.presentedActionResult?.title, "All Statuses")
+        XCTAssertEqual(model.toasts.first?.title, "Reset States")
     }
 }
 
@@ -480,5 +528,9 @@ private final class InMemoryStateStore: StateStoreProtocol {
             status: status.rawValue.lowercased(),
             timestamp: formatter.string(from: timestamp)
         )
+    }
+
+    func resetStates() throws {
+        states.removeAll()
     }
 }

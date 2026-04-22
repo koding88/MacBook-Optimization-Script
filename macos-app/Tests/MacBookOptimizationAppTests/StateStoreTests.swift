@@ -37,4 +37,22 @@ final class StateStoreTests: XCTestCase {
         XCTAssertEqual(states.count, 1)
         XCTAssertEqual(states["firewall"]?.status, "enabled")
     }
+
+    func testResetStatesClearsExistingEntries() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fileURL = directory.appendingPathComponent(".macbook_optimizer_state.conf")
+        let store = StateStore(configURL: fileURL)
+
+        try store.updateState(
+            featureID: "dns_flush",
+            status: .enabled,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        try store.resetStates()
+
+        let states = try store.loadStates()
+        XCTAssertTrue(states.isEmpty)
+    }
 }

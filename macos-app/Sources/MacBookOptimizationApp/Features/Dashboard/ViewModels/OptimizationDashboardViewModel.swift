@@ -5,6 +5,7 @@ import Combine
 enum SidebarDestination: Hashable {
     case category(ActionCategory)
     case dashboard
+    case statuses
     case activity
     case logs
     case cpu
@@ -138,6 +139,21 @@ final class OptimizationDashboardViewModel: ObservableObject {
         activityFeed.filter { activityFilter.includes($0.date) }
     }
 
+    func isActionAvailable(_ action: OptimizationAction) -> Bool {
+        action.isSupported(on: machineSummary)
+    }
+
+    func unavailableMessage(for action: OptimizationAction) -> String? {
+        guard !isActionAvailable(action) else { return nil }
+
+        switch action.availability {
+        case .allMacs:
+            return localizer.text(.unavailable)
+        case .intelOnly:
+            return localizer.text(.intelOnlyHint)
+        }
+    }
+
     func showCategory(_ category: ActionCategory) {
         selectedDestination = .category(category)
     }
@@ -150,6 +166,55 @@ final class OptimizationDashboardViewModel: ObservableObject {
         isShowingSettings = true
     }
 
+    func resetStoredStatuses() {
+        do {
+            try stateStore.resetStates()
+            loadStatusesFromDisk()
+            enqueueToast(
+                ToastMessage(
+                    type: .success,
+                    title: localizer.text(.statusReset),
+                    message: localizer.text(.statusResetMessage),
+                    dismissAfter: 3
+                )
+            )
+            appendActivity(
+                title: localizer.text(.statusReset),
+                message: localizer.text(.statusResetMessage),
+                kind: .success,
+                symbolName: "arrow.counterclockwise.circle"
+            )
+            presentedActionResult = PresentedActionResult(
+                kind: .info,
+                title: localizer.text(.panelAllStatuses),
+                message: localizer.text(.statusResetMessage),
+                symbolName: "list.bullet.rectangle"
+            )
+        } catch {
+            debugOutput = error.localizedDescription
+            enqueueToast(
+                ToastMessage(
+                    type: .error,
+                    title: localizer.text(.statusReset),
+                    message: localizer.text(.statusResetFailedMessage)
+                )
+            )
+            appendActivity(
+                title: localizer.text(.statusReset),
+                message: localizer.text(.statusResetFailedMessage),
+                kind: .failure,
+                symbolName: "exclamationmark.triangle"
+            )
+            presentedActionResult = PresentedActionResult(
+                kind: .error,
+                title: localizer.text(.panelAllStatuses),
+                message: localizer.text(.statusResetFailedMessage),
+                symbolName: "exclamationmark.triangle",
+                details: error.localizedDescription
+            )
+        }
+    }
+
     func dismissPresentedActionResult() {
         presentedActionResult = nil
     }
@@ -160,6 +225,11 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     func run(actionID: String) async {
         guard let action = actions.first(where: { $0.id == actionID }), isRunningActionID == nil else { return }
+
+        guard isActionAvailable(action) else {
+            presentUnavailableResult(for: action)
+            return
+        }
 
         if let review = SystemActionReviewPlan.build(for: action, localizer: localizer) {
             pendingSystemActionReview = review
@@ -242,6 +312,11 @@ final class OptimizationDashboardViewModel: ObservableObject {
     }
 
     private func run(_ action: OptimizationAction) async {
+        guard isActionAvailable(action) else {
+            presentUnavailableResult(for: action)
+            return
+        }
+
         let previousStatus = action.status
         presentedActionResult = nil
         updateStatus(for: action.id, to: .running)
@@ -306,6 +381,40 @@ final class OptimizationDashboardViewModel: ObservableObject {
     private func appendActivity(event: ActivityEvent) {
         activityFeed.insert(ActivityItem(event: event), at: 0)
         activityFeed = Array(activityFeed.prefix(40))
+    }
+
+    private func presentUnavailableResult(for action: OptimizationAction) {
+        let actionTitle = localizer.string(action.titleKey)
+        let message: String
+
+        switch action.availability {
+        case .allMacs:
+            message = localizer.text(.unavailable)
+        case .intelOnly:
+            message = localizer.text(.resultDialogIntelOnlyMessage)
+        }
+
+        debugOutput = message
+        enqueueToast(
+            ToastMessage(
+                type: .warning,
+                title: localizer.text(.actionUnavailableTitle),
+                message: localizer.format(.actionUnavailableIntelOnlyMessage, actionTitle),
+                dismissAfter: 4
+            )
+        )
+        appendActivity(
+            title: localizer.text(.actionUnavailableTitle),
+            message: localizer.format(.actionUnavailableIntelOnlyMessage, actionTitle),
+            kind: .warning,
+            symbolName: "exclamationmark.triangle"
+        )
+        presentedActionResult = PresentedActionResult(
+            kind: .warning,
+            title: actionTitle,
+            message: message,
+            symbolName: action.symbolName
+        )
     }
 
     private func enqueueToast(_ toast: ToastMessage) {

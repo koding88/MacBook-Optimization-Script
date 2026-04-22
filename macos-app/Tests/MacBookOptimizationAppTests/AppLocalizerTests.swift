@@ -11,10 +11,19 @@ final class AppLocalizerTests: XCTestCase {
             .snapshotCPUCores,
             .snapshotMemoryFree,
             .snapshotMemoryCompressed,
+            .snapshotGPUMetal,
+            .snapshotDiskAvailable,
+            .snapshotDiskMountPoint,
+            .snapshotNetworkGateway,
+            .snapshotNetworkHardwarePort,
             .snapshotBatteryPowerSource,
             .snapshotBatteryState,
             .snapshotBatteryCondition,
             .snapshotBatteryCycleCount,
+            .statusReset,
+            .statusResetMessage,
+            .statusResetFailedMessage,
+            .statusEmpty,
             .done,
             .detailSummary,
             .inspectionToastMessage,
@@ -22,11 +31,16 @@ final class AppLocalizerTests: XCTestCase {
             .resultDialogInspectionMessage,
             .resultDialogFailedMessage,
             .resultDialogAdministratorCancelledMessage,
+            .resultDialogIntelOnlyMessage,
             .resultDialogDetailsTitle,
             .noLogsYet,
             .noOutputYet,
             .storageAvailableSuffix,
-            .refreshMinutesFormat
+            .refreshMinutesFormat,
+            .intelOnly,
+            .intelOnlyHint,
+            .actionUnavailableTitle,
+            .actionUnavailableIntelOnlyMessage
         ]
 
         for key in requiredKeys {

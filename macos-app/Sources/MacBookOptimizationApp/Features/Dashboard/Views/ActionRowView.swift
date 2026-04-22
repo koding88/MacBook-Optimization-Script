@@ -10,6 +10,8 @@ struct ActionRowMetrics {
 struct ActionRowView: View {
     let action: OptimizationAction
     let isRunning: Bool
+    let isAvailable: Bool
+    let availabilityMessage: String?
     let localizer: AppLocalizer
     let density: RowDensity
     let runAction: () -> Void
@@ -34,6 +36,12 @@ struct ActionRowView: View {
                         Label(localizer.text(.riskyAction), systemImage: "exclamationmark.triangle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+
+                    if action.availability == .intelOnly {
+                        Label(localizer.text(.intelOnly), systemImage: "cpu")
+                            .font(.caption)
+                            .foregroundStyle(isAvailable ? Color.secondary : Color.orange)
                     }
                 }
 
@@ -62,6 +70,12 @@ struct ActionRowView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+
+                if let availabilityMessage {
+                    Text(availabilityMessage)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Spacer(minLength: 12)
@@ -80,7 +94,7 @@ struct ActionRowView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
-            .disabled(isRunning)
+            .disabled(isRunning || !isAvailable)
         }
         .padding(.vertical, density == .comfortable ? 10 : 6)
         .frame(minHeight: metrics.minimumRowHeight, alignment: .center)

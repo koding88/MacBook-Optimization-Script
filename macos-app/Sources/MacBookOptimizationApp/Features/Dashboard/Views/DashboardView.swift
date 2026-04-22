@@ -110,6 +110,8 @@ struct DashboardView: View {
             Section(localizer.text(.summaryTitle)) {
                 Label(localizer.text(.panelDashboard), systemImage: "macwindow")
                     .tag(SidebarDestination.dashboard)
+                Label(localizer.text(.panelAllStatuses), systemImage: "list.bullet.rectangle")
+                    .tag(SidebarDestination.statuses)
                 Label(localizer.text(.activityTitle), systemImage: "bell.badge")
                     .tag(SidebarDestination.activity)
                 Label(localizer.text(.logsTitle), systemImage: "terminal")
@@ -143,6 +145,9 @@ struct DashboardView: View {
         switch model.selectedDestination {
         case .dashboard:
             dashboardOverview
+        case .statuses:
+            StatusesPanelView(localizer: localizer, actions: model.actions)
+                .environmentObject(model)
         case .activity:
             ActivityFeedView(
                 localizer: localizer,
@@ -165,6 +170,8 @@ struct DashboardView: View {
                     ActionRowView(
                         action: action,
                         isRunning: model.isRunningActionID == action.id,
+                        isAvailable: model.isActionAvailable(action),
+                        availabilityMessage: model.unavailableMessage(for: action),
                         localizer: localizer,
                         density: settings.rowDensity
                     ) {
@@ -185,6 +192,8 @@ struct DashboardView: View {
                     ActionRowView(
                         action: action,
                         isRunning: model.isRunningActionID == action.id,
+                        isAvailable: model.isActionAvailable(action),
+                        availabilityMessage: model.unavailableMessage(for: action),
                         localizer: localizer,
                         density: settings.rowDensity
                     ) {

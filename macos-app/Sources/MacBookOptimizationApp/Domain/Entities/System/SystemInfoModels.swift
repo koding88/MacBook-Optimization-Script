@@ -89,6 +89,7 @@ struct MachineSummary: Equatable {
     }
 
     var chipName: String { chip }
+    var isIntelMac: Bool { chip.localizedCaseInsensitiveContains("Intel") }
 }
 
 struct BatterySummary: Equatable {

@@ -139,6 +139,12 @@ final class OptimizationEngine: OptimizationExecuting {
             return memoryInspectionPresentation(output: output)
         case "system_check_battery":
             return batteryInspectionPresentation(output: output)
+        case "system_check_gpu":
+            return gpuInspectionPresentation(output: output)
+        case "system_check_disk":
+            return diskInspectionPresentation(output: output)
+        case "system_check_network":
+            return networkInspectionPresentation(output: output)
         default:
             return nil
         }
@@ -230,6 +236,77 @@ final class OptimizationEngine: OptimizationExecuting {
                 secondaryValues: secondaryValues
             ),
             symbolName: "battery.75percent"
+        )
+    }
+
+    private func gpuInspectionPresentation(output: String) -> InspectionPresentation? {
+        let lines = outputLines(from: output)
+        let model = value(after: "GPU Model:", in: lines)
+        let metalSupport = value(after: "Metal Support:", in: lines)
+
+        guard let primaryValue = model ?? metalSupport else { return nil }
+
+        var secondaryValues: [ActionResultSummary.LineItem] = []
+        if let metalSupport, metalSupport != primaryValue {
+            secondaryValues.append(.init(labelKey: .snapshotGPUMetal, value: metalSupport))
+        }
+
+        return InspectionPresentation(
+            summary: ActionResultSummary(
+                primaryValue: primaryValue,
+                secondaryValues: secondaryValues
+            ),
+            symbolName: "display.2"
+        )
+    }
+
+    private func diskInspectionPresentation(output: String) -> InspectionPresentation? {
+        let lines = outputLines(from: output)
+        let used = value(after: "Disk Used:", in: lines)
+        let available = value(after: "Disk Available:", in: lines)
+        let mountPoint = value(after: "Mount Point:", in: lines)
+
+        guard let primaryValue = used ?? available ?? mountPoint else { return nil }
+
+        var secondaryValues: [ActionResultSummary.LineItem] = []
+        if let available, available != primaryValue {
+            secondaryValues.append(.init(labelKey: .snapshotDiskAvailable, value: available))
+        }
+        if let mountPoint, mountPoint != primaryValue {
+            secondaryValues.append(.init(labelKey: .snapshotDiskMountPoint, value: mountPoint))
+        }
+
+        return InspectionPresentation(
+            summary: ActionResultSummary(
+                primaryValue: primaryValue,
+                secondaryValues: secondaryValues
+            ),
+            symbolName: "internaldrive"
+        )
+    }
+
+    private func networkInspectionPresentation(output: String) -> InspectionPresentation? {
+        let lines = outputLines(from: output)
+        let activeInterface = value(after: "Active Interface:", in: lines)
+        let gateway = value(after: "Gateway:", in: lines)
+        let hardwarePort = value(after: "Hardware Port:", in: lines)
+
+        guard let primaryValue = activeInterface ?? gateway ?? hardwarePort else { return nil }
+
+        var secondaryValues: [ActionResultSummary.LineItem] = []
+        if let gateway, gateway != primaryValue {
+            secondaryValues.append(.init(labelKey: .snapshotNetworkGateway, value: gateway))
+        }
+        if let hardwarePort, hardwarePort != primaryValue {
+            secondaryValues.append(.init(labelKey: .snapshotNetworkHardwarePort, value: hardwarePort))
+        }
+
+        return InspectionPresentation(
+            summary: ActionResultSummary(
+                primaryValue: primaryValue,
+                secondaryValues: secondaryValues
+            ),
+            symbolName: "network"
         )
     }
 

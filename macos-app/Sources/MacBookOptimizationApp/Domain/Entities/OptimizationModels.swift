@@ -39,6 +39,20 @@ enum ActionKind {
     case statuses
 }
 
+enum ActionAvailability: Hashable {
+    case allMacs
+    case intelOnly
+
+    func isSupported(on machineSummary: MachineSummary?) -> Bool {
+        switch self {
+        case .allMacs:
+            return true
+        case .intelOnly:
+            return machineSummary?.isIntelMac == true
+        }
+    }
+}
+
 struct OptimizationAction: Identifiable, Hashable {
     let id: String
     let titleKey: String
@@ -49,9 +63,40 @@ struct OptimizationAction: Identifiable, Hashable {
     let isRisky: Bool
     let estimatedTime: String
     let requiresRestart: Bool
+    let availability: ActionAvailability
     let kind: ActionKind
     var status: ActionStatus
     var lastRunDescription: String?
+
+    init(
+        id: String,
+        titleKey: String,
+        descriptionKey: String,
+        category: ActionCategory,
+        symbolName: String,
+        statusFeatureID: String?,
+        isRisky: Bool,
+        estimatedTime: String,
+        requiresRestart: Bool,
+        availability: ActionAvailability = .allMacs,
+        kind: ActionKind,
+        status: ActionStatus,
+        lastRunDescription: String? = nil
+    ) {
+        self.id = id
+        self.titleKey = titleKey
+        self.descriptionKey = descriptionKey
+        self.category = category
+        self.symbolName = symbolName
+        self.statusFeatureID = statusFeatureID
+        self.isRisky = isRisky
+        self.estimatedTime = estimatedTime
+        self.requiresRestart = requiresRestart
+        self.availability = availability
+        self.kind = kind
+        self.status = status
+        self.lastRunDescription = lastRunDescription
+    }
 
     static func == (lhs: OptimizationAction, rhs: OptimizationAction) -> Bool {
         lhs.id == rhs.id
@@ -72,10 +117,15 @@ struct OptimizationAction: Identifiable, Hashable {
             isRisky: isRisky,
             estimatedTime: estimatedTime,
             requiresRestart: requiresRestart,
+            availability: availability,
             kind: .command(commandRequests),
             status: status,
             lastRunDescription: lastRunDescription
         )
+    }
+
+    func isSupported(on machineSummary: MachineSummary?) -> Bool {
+        availability.isSupported(on: machineSummary)
     }
 }
 

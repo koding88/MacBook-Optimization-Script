@@ -114,4 +114,8 @@ private final class InMemoryStateStore: StateStoreProtocol {
         formatter.formatOptions = [.withInternetDateTime]
         states[featureID] = FeatureState(status: status.rawValue.lowercased(), timestamp: formatter.string(from: timestamp))
     }
+
+    func resetStates() throws {
+        states.removeAll()
+    }
 }

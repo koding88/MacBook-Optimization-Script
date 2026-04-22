@@ -75,6 +75,18 @@ final class StateStore: StateStoreProtocol {
         try fileHandle.write(contentsOf: data)
     }
 
+    func resetStates() throws {
+        let url = configURL()
+        if fileManager.fileExists(atPath: url.path) {
+            do {
+                try fileManager.removeItem(at: url)
+            } catch {
+                throw StateStoreError.unwritableConfig(url)
+            }
+        }
+        ensureConfigFileExists(at: url)
+    }
+
     private func configURL() -> URL {
         customConfigURL ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".macbook_optimizer_state.conf")
     }

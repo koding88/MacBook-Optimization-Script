@@ -28,7 +28,7 @@ final class SystemCommandExecutor: SystemCommandExecuting {
     private func executeRegular(_ command: String) async throws -> CommandExecutionResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["-lc", command]
+        process.arguments = Self.regularShellArguments(for: command)
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -80,5 +80,9 @@ final class SystemCommandExecutor: SystemCommandExecuting {
         return normalized.contains("user canceled")
             || normalized.contains("user cancelled")
             || normalized.contains("(-128)")
+    }
+
+    static func regularShellArguments(for command: String) -> [String] {
+        ["-f", "-c", command]
     }
 }

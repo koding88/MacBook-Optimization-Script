@@ -26,6 +26,7 @@ protocol OptimizationExecuting {
 protocol StateStoreProtocol {
     func loadStates() throws -> [String: FeatureState]
     func updateState(featureID: String, status: ActionStatus, timestamp: Date) throws
+    func resetStates() throws
 }
 
 protocol SystemInfoProviding {
