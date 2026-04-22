@@ -21,9 +21,20 @@ trap cleanup EXIT
 
 mkdir -p "$ICONSET_DIR"
 
-# macOS icons need a square source. The project's PNG is widescreen,
-# so center-crop it to a square before generating the iconset sizes.
-sips -c 768 768 "$SOURCE_PNG" --out "$BASE_ICON" >/dev/null
+WIDTH="$(sips -g pixelWidth "$SOURCE_PNG" | awk '/pixelWidth:/{print $2}')"
+HEIGHT="$(sips -g pixelHeight "$SOURCE_PNG" | awk '/pixelHeight:/{print $2}')"
+
+if [ "$WIDTH" != "$HEIGHT" ]; then
+    EDGE="$WIDTH"
+    if [ "$HEIGHT" -lt "$EDGE" ]; then
+        EDGE="$HEIGHT"
+    fi
+    sips -c "$EDGE" "$EDGE" "$SOURCE_PNG" --out "$BASE_ICON" >/dev/null
+else
+    cp "$SOURCE_PNG" "$BASE_ICON"
+fi
+
+sips -Z 1024 "$BASE_ICON" --out "$BASE_ICON" >/dev/null
 
 generate_icon() {
     local size="$1"

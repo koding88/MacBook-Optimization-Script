@@ -1,7 +1,8 @@
-.DS_Store
+**/.DS_Store
 
 # Swift Package Manager
 macos-app/.build/
+macos-app/.swiftpm/
 macos-app/Package.resolved
 
 # Local app outputs
@@ -17,9 +18,11 @@ dist/
 # Local git worktrees
 .worktrees/
 
-# Documentation
-docs/
-
+# Editor and local IDE metadata
+.vscode/
+.idea/
+*.xcuserstate
+**/xcuserdata/
 
 
 

@@ -1,33 +1,25 @@
-# 🚀 MacBook Optimization Script
+# MacBook Optimization
 
-## 📋 Overview
+## Overview
 
-MacBook Optimization Script is a comprehensive tool designed to enhance your MacBook's performance through various optimizations and provide real-time system monitoring. Built with modularity in mind, it offers an intuitive interface and extensive customization options.
+MacBook Optimization is a native macOS SwiftUI app for running common Mac optimization and diagnostics tasks from a single interface. It includes step review, localized UI, status tracking, and structured result sheets for inspection-style actions.
 
-### 🌟 Key Highlights
+- Native macOS app built with SwiftUI
+- Step-by-step review before running action groups
+- Toasts, activity feed, and in-app result sheets
+- Status tracking persisted in `~/.macbook_optimizer_state.conf`
+- CPU, memory, battery, GPU, disk, network, and thermal monitoring
+- MDM inspection and AutoBoot / power utilities
 
--   📊 Real-time system monitoring
--   🔧 One-click optimizations
--   🔄 Automatic status tracking
--   🛡️ Safe and reversible changes
--   📱 User-friendly interface
--   🔍 MDM Status Detection
--   💻 Intel/Apple Silicon compatibility checks
-
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# Clone this repository
 git clone https://github.com/koding88/MacBook-Optimization-Script.git
-
-# Go into the repository
 cd MacBook-Optimization-Script
-
-# Make the script executable
-chmod +x script.sh
-
-# Run the script
-./script.sh
+cd macos-app
+swift test
+./build_app.sh
+open "build/MacBook Optimization.app"
 ```
 
 ## 📚 Documentation
@@ -36,82 +28,77 @@ chmod +x script.sh
 
 -   macOS 10.15 (Catalina) or later
 -   Administrative privileges
--   Terminal access
--   Internet connection (for some features)
+-   Xcode Command Line Tools / Swift toolchain
 
 ### Directory Structure
 
 ```
 MacBook-Optimization-Script/
-├── script.sh              # Main script
-├── modules/              # Module directory
-│   ├── config.sh         # Configuration module
-│   ├── ui_components.sh  # UI components
-│   ├── menu_handler.sh   # Menu handling
-│   ├── power_management.sh # Power and boot management
-│   ├── system_monitoring.sh # System monitoring
-│   └── ...              # Other modules
-├── assets/              # Images and resources
-└── docs/               # Documentation
+├── assets/              # Shared brand assets (icons, artwork)
+├── docs/                # Repository notes and maintenance docs
+├── macos-app/           # Native SwiftUI macOS application
+│   ├── Sources/         # App source code
+│   ├── Tests/           # Unit tests
+│   ├── packaging/       # Packaging metadata for the macOS bundle
+│   ├── scripts/         # Build/release/run script implementations
+│   ├── build_app.sh     # Compatibility wrapper for local app bundle build
+│   └── release_app.sh   # Compatibility wrapper for DMG/release packaging
+└── dist/                # Built artifacts
 ```
 
-## ✨ Features
+Detailed layout notes live in [docs/repository-structure.md](docs/repository-structure.md).
 
-### 🖥 System Optimizations
+## Features
+
+### System Optimizations
 
 -   CPU and Memory optimization
 -   SSD performance tuning
 -   Security enhancements
 -   Power management optimization
--   AutoBoot control (Intel Macs)
+-   AutoBoot toggle flow (Intel Macs)
 -   MDM status detection
 
-### 🌐 Network Optimizations
+### Network Optimizations
 
 -   TCP/IP stack optimization
 -   DNS cache management
 -   Firewall configuration
 -   Network performance tuning
 
-### 💾 Storage Optimizations
+### Storage Optimizations
 
 -   System cache cleanup
 -   Unused language removal
 -   Font cache optimization
 -   .DS_Store file management
 
-### ⚡ Performance Tweaks
+### Performance Tweaks
 
 -   Spotlight indexing control
 -   Animation optimization
 -   Dashboard management
 -   Dock performance tuning
 
-### 🔋 Power Management
+### Monitoring and Diagnostics
 
 -   Power saving mode toggle
--   AutoBoot control (Intel Macs)
--   Sleep/Wake optimization
--   Battery life enhancement
-
-### 🔍 System Monitoring
-
--   Real-time performance tracking
+-   CPU / Memory / Battery snapshots
+-   GPU / Disk / Network / Thermal snapshots
 -   MDM status detection
--   System health checks
 -   Optimization status tracking
 
-## 📊 Status Tracking
+## Status Tracking
 
-The script includes a comprehensive status tracking system that provides:
+The app includes a status tracking system that provides:
 
 | Feature           | Description                               |
 | ----------------- | ----------------------------------------- |
 | Real-time Updates | Immediate feedback on optimization status |
-| History Logging   | Track all performed optimizations         |
-| Success Metrics   | Monitor success/failure rates             |
+| Activity Feed     | Track completed and failed actions        |
+| Result Sheets     | Show structured output for inspections    |
 | Timestamps        | Record when optimizations were performed  |
-| MDM Detection     | Check for Mobile Device Management        |
+| Reset Support     | Clear persisted action states in-app      |
 
 ## 🤝 Contributing
 
@@ -134,9 +121,9 @@ We welcome contributions! Here's how you can help:
 
 For more details, please see our [Contributing Guidelines](CONTRIBUTING.md).
 
-## 🔒 Security
+## Security
 
-This script requires administrative privileges. Please:
+Some actions require administrative privileges. Please:
 
 -   Review the code before running
 -   Keep your system up to date
@@ -153,7 +140,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -   [MacOS Command Line Tools](https://developer.apple.com/library/archive/technotes/tn2002/tn2002.html)
 -   All [contributors](https://github.com/koding88/MacBook-Optimization-Script/graphs/contributors)
 
-## 📞 Support
+## Support
 
 Need help? Here are some resources:
 
