@@ -7,8 +7,8 @@ protocol SystemCommandExecuting {
 protocol ActionFeedbackPresenting {
     func presentInspection(
         action: OptimizationAction,
-        title: String,
-        summaryLines: [String],
+        summary: ActionResultSummary,
+        debugLog: String?,
         symbolName: String?
     ) -> ActionExecutionResult
 

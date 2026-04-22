@@ -5,10 +5,14 @@ struct ActionFeedbackPresenter: ActionFeedbackPresenting {
 
     func presentInspection(
         action: OptimizationAction,
-        title: String,
-        summaryLines: [String],
+        summary: ActionResultSummary,
+        debugLog: String?,
         symbolName: String? = nil
     ) -> ActionExecutionResult {
+        let title = localizer.string(action.titleKey)
+        let summaryLines = [summary.primaryValue] + summary.secondaryValues.map {
+            "\(localizer.text($0.labelKey)): \($0.value)"
+        }
         let cappedSummaryLines = Array(summaryLines.prefix(3))
         let activityMessage = cappedSummaryLines.joined(separator: " • ")
 
@@ -27,8 +31,8 @@ struct ActionFeedbackPresenter: ActionFeedbackPresenting {
                 message: activityMessage,
                 symbolName: symbolName ?? action.symbolName
             ),
-            summary: nil,
-            debugLog: nil
+            summary: summary,
+            debugLog: debugLog
         )
     }
 

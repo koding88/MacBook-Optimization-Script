@@ -66,6 +66,8 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
 
         let model = makeModel(result: result)
         await model.run(actionID: "system_check_battery")
+        model.confirmSystemActionReview()
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertEqual(model.toasts.first?.summaryLines.count, 3)
         model.dismissToast(id: toastID)
@@ -73,7 +75,39 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testRiskyActionShowsPendingConfirmationInsteadOfCancelling() async {
+    func testCompletedActionPresentsResultSheetImmediately() async {
+        let result = ActionExecutionResult(
+            status: .enabled,
+            toast: ToastMessage(type: .success, title: "CPU Snapshot", message: "Inspection complete"),
+            activityEvent: ActivityEvent(
+                timestamp: .now,
+                type: .success,
+                title: "CPU Snapshot",
+                message: "Apple M2 Pro • CPU Cores: 12 • CPU Usage: 11%",
+                symbolName: "cpu"
+            ),
+            summary: ActionResultSummary(
+                primaryValue: "Apple M2 Pro",
+                secondaryValues: [
+                    .init(labelKey: .snapshotCPUCores, value: "12"),
+                    .init(labelKey: .snapshotCPUUsage, value: "11%")
+                ]
+            ),
+            debugLog: "CPU Model: Apple M2 Pro"
+        )
+
+        let model = makeModel(result: result)
+        await model.run(actionID: "system_check_cpu")
+        model.confirmSystemActionReview()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(model.presentedActionResult?.title, "CPU Snapshot")
+        XCTAssertEqual(model.presentedActionResult?.summary?.primaryValue, "Apple M2 Pro")
+        XCTAssertEqual(model.presentedActionResult?.details, "CPU Model: Apple M2 Pro")
+    }
+
+    @MainActor
+    func testRiskyActionShowsStepReviewBeforeConfirmation() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
 
@@ -88,7 +122,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
 
         await model.run(actionID: action.id)
 
-        XCTAssertEqual(model.pendingConfirmationAction?.id, action.id)
+        XCTAssertEqual(model.pendingSystemActionReview?.action.id, action.id)
         XCTAssertFalse(model.activityFeed.contains { $0.title == "Action Cancelled" })
     }
 
@@ -132,6 +166,30 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         XCTAssertEqual(model.pendingSystemActionReview?.action.id, "network_optimization")
         XCTAssertEqual(model.pendingSystemActionReview?.selectedCount, model.pendingSystemActionReview?.steps.count)
         XCTAssertNil(engine.lastAction)
+    }
+
+    @MainActor
+    func testAdditionalReviewCategoriesShowStepReviewBeforeExecution() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defaults.set(false, forKey: "app.confirmPrivilegedActions")
+
+        let actionIDs = ["cache_clear", "dashboard", "disk_permissions", "system_check_cpu"]
+
+        for actionID in actionIDs {
+            let engine = RecordingOptimizationEngine()
+            let model = OptimizationDashboardViewModel(
+                engine: engine,
+                stateStore: InMemoryStateStore(),
+                settings: AppSettingsStore(defaults: defaults),
+                systemInfoProvider: MockSystemInfoProvider()
+            )
+
+            await model.run(actionID: actionID)
+
+            XCTAssertEqual(model.pendingSystemActionReview?.action.id, actionID)
+            XCTAssertNil(engine.lastAction)
+        }
     }
 
     @MainActor
@@ -205,6 +263,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.id == "spotlight" }))
 
         await model.run(actionID: action.id)
+        model.confirmSystemActionReview()
         model.confirmPendingAction()
 
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -260,6 +319,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         XCTAssertEqual(updatedAction.status, .ready)
         XCTAssertEqual(model.activityFeed.first?.title, "Administrator Prompt Cancelled")
         XCTAssertEqual(model.toasts.first?.type, .warning)
+        XCTAssertEqual(model.presentedActionResult?.kind, .warning)
     }
 
     @MainActor
@@ -320,10 +380,13 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         let action: OptimizationAction = try! XCTUnwrap(model.actions.first(where: { $0.id == "dashboard" }))
 
         await model.run(actionID: action.id)
+        model.confirmSystemActionReview()
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertEqual(model.toasts.first?.title, "Cleanup Ready")
         XCTAssertEqual(model.toasts.first?.message, "Cache cleanup finished.")
         XCTAssertEqual(model.activityFeed.first?.title, "Action Completed")
+        XCTAssertEqual(model.presentedActionResult?.title, "Disable Dashboard")
 
         model.activityFilter = .lastHour
 

@@ -57,6 +57,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
     @Published var isRunningActionID: String?
     @Published var pendingSystemActionReview: SystemActionReviewPlan?
     @Published var pendingConfirmationAction: OptimizationAction?
+    @Published var presentedActionResult: PresentedActionResult?
     @Published var isShowingSettings = false
     @Published var toasts: [ToastMessage] = []
     @Published var activityFilter: ActivityTimeFilter = .all
@@ -149,6 +150,10 @@ final class OptimizationDashboardViewModel: ObservableObject {
         isShowingSettings = true
     }
 
+    func dismissPresentedActionResult() {
+        presentedActionResult = nil
+    }
+
     func dismissToast(id: ToastMessage.ID) {
         toasts.removeAll { $0.id == id }
     }
@@ -238,6 +243,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     private func run(_ action: OptimizationAction) async {
         let previousStatus = action.status
+        presentedActionResult = nil
         updateStatus(for: action.id, to: .running)
         appendActivity(
             title: localizer.text(.runningActionTitle),
@@ -271,9 +277,11 @@ final class OptimizationDashboardViewModel: ObservableObject {
             loadStatusesFromDisk()
             enqueueToast(result.toast)
             appendActivity(event: result.activityEvent)
+            presentActionResult(result, for: action)
         } catch {
             debugOutput = error.localizedDescription
             handleExecutionError(error, for: action, previousStatus: previousStatus)
+            presentExecutionError(error, for: action)
         }
     }
 
@@ -303,6 +311,64 @@ final class OptimizationDashboardViewModel: ObservableObject {
     private func enqueueToast(_ toast: ToastMessage) {
         toasts.insert(toast, at: 0)
         toasts = Array(toasts.prefix(5))
+    }
+
+    private func presentActionResult(_ result: ActionExecutionResult, for action: OptimizationAction) {
+        let details = result.debugLog?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasSummary = result.summary != nil
+        let kind: PresentedActionResultKind = hasSummary ? .info : .success
+        let message: String
+
+        if hasSummary {
+            message = localizer.text(.resultDialogInspectionMessage)
+        } else {
+            message = localizer.text(.resultDialogCompletedMessage)
+        }
+
+        presentedActionResult = PresentedActionResult(
+            kind: kind,
+            title: localizer.string(action.titleKey),
+            message: message,
+            symbolName: action.symbolName,
+            summary: result.summary,
+            details: details?.isEmpty == true ? nil : details
+        )
+    }
+
+    private func presentExecutionError(_ error: Error, for action: OptimizationAction) {
+        let title = localizer.string(action.titleKey)
+        let kind: PresentedActionResultKind
+        let message: String
+        let details: String?
+
+        if let systemError = error as? SystemCommandExecutorError {
+            switch systemError {
+            case .administratorAuthorizationCancelled:
+                kind = .warning
+                message = localizer.text(.resultDialogAdministratorCancelledMessage)
+                details = nil
+            case .administratorExecutionFailed(let output):
+                kind = .error
+                message = localizer.text(.resultDialogFailedMessage)
+                details = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            case .invalidCommand(let command):
+                kind = .error
+                message = localizer.text(.resultDialogFailedMessage)
+                details = command.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } else {
+            kind = .error
+            message = localizer.text(.resultDialogFailedMessage)
+            details = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        presentedActionResult = PresentedActionResult(
+            kind: kind,
+            title: title,
+            message: message,
+            symbolName: action.symbolName,
+            details: details?.isEmpty == true ? nil : details
+        )
     }
 
     private func handleExecutionError(_ error: Error, for action: OptimizationAction, previousStatus: ActionStatus) {

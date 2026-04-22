@@ -20,12 +20,20 @@ final class ActionFeedbackPresenterTests: XCTestCase {
 
         let result = presenter.presentInspection(
             action: action,
-            title: "CPU Snapshot",
-            summaryLines: ["CPU: Apple M2 Pro", "Cores: 12", "Usage: 11%"]
+            summary: ActionResultSummary(
+                primaryValue: "Apple M2 Pro",
+                secondaryValues: [
+                    .init(labelKey: .snapshotCPUCores, value: "12"),
+                    .init(labelKey: .snapshotCPUUsage, value: "11%")
+                ]
+            ),
+            debugLog: "raw cpu output"
         )
 
         XCTAssertEqual(result.toast.summaryLines.count, 3)
         XCTAssertTrue(result.activityEvent.message.contains("Apple M2 Pro"))
         XCTAssertNotEqual(result.toast.message, result.activityEvent.message)
+        XCTAssertEqual(result.summary?.primaryValue, "Apple M2 Pro")
+        XCTAssertEqual(result.debugLog, "raw cpu output")
     }
 }

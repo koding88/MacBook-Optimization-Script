@@ -36,6 +36,19 @@ struct DashboardView: View {
                     .environmentObject(model)
             }
         }
+        .sheet(
+            item: Binding(
+                get: { model.presentedActionResult },
+                set: { newValue in
+                    if newValue == nil {
+                        model.dismissPresentedActionResult()
+                    }
+                }
+            )
+        ) { presentedResult in
+            ActionResultSheet(result: presentedResult, localizer: localizer)
+                .environmentObject(model)
+        }
         .confirmationDialog(
             localizer.text(.confirmRiskyTitle),
             isPresented: Binding(

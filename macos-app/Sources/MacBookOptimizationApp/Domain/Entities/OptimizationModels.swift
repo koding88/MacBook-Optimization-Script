@@ -150,6 +150,41 @@ struct ActionResultSummary: Equatable {
     let secondaryValues: [LineItem]
 }
 
+enum PresentedActionResultKind: Equatable {
+    case success
+    case info
+    case warning
+    case error
+}
+
+struct PresentedActionResult: Identifiable, Equatable {
+    let id: UUID
+    let kind: PresentedActionResultKind
+    let title: String
+    let message: String
+    let symbolName: String
+    let summary: ActionResultSummary?
+    let details: String?
+
+    init(
+        id: UUID = UUID(),
+        kind: PresentedActionResultKind,
+        title: String,
+        message: String,
+        symbolName: String,
+        summary: ActionResultSummary? = nil,
+        details: String? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.message = message
+        self.symbolName = symbolName
+        self.summary = summary
+        self.details = details
+    }
+}
+
 struct ActionExecutionResult {
     let status: ActionStatus
     let toast: ToastMessage

@@ -31,7 +31,7 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
     }
 
     static func build(for action: OptimizationAction, localizer: AppLocalizer) -> SystemActionReviewPlan? {
-        guard [.system, .network].contains(action.category),
+        guard [.system, .network, .storage, .performance, .maintenance, .monitoring].contains(action.category),
               let requests = action.kind.commandRequests,
               !requests.isEmpty else {
             return nil
@@ -79,6 +79,38 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
             return dnsFlushDescriptor(for: request.command, localizer: localizer)
         case "firewall":
             return firewallDescriptor(for: request.command, localizer: localizer)
+        case "cache_clear":
+            return cacheClearDescriptor(for: request.command, localizer: localizer)
+        case "language_cleanup":
+            return languageCleanupDescriptor(for: request.command, localizer: localizer)
+        case "font_cache":
+            return fontCacheDescriptor(for: request.command, localizer: localizer)
+        case "ds_store_cleanup":
+            return dsStoreCleanupDescriptor(for: request.command, localizer: localizer)
+        case "spotlight":
+            return spotlightDescriptor(for: request.command, localizer: localizer)
+        case "dashboard":
+            return dashboardDescriptor(for: request.command, localizer: localizer)
+        case "animations":
+            return animationsDescriptor(for: request.command, localizer: localizer)
+        case "dock_optimization":
+            return dockOptimizationDescriptor(for: request.command, localizer: localizer)
+        case "disk_permissions":
+            return diskPermissionsDescriptor(for: request.command, localizer: localizer)
+        case "maintenance_scripts":
+            return maintenanceScriptsDescriptor(for: request.command, localizer: localizer)
+        case "log_cleanup":
+            return logCleanupDescriptor(for: request.command, localizer: localizer)
+        case "autoboot":
+            return autobootDescriptor(for: request.command, localizer: localizer)
+        case "mdm_status":
+            return mdmStatusDescriptor(for: request.command, localizer: localizer)
+        case "system_check_cpu":
+            return cpuSnapshotDescriptor(for: request.command, localizer: localizer)
+        case "system_check_memory":
+            return memorySnapshotDescriptor(for: request.command, localizer: localizer)
+        case "system_check_battery":
+            return batterySnapshotDescriptor(for: request.command, localizer: localizer)
         default:
             return (
                 title: localizer.format(.systemReviewStepFallbackTitle, stepIndex + 1),
@@ -204,6 +236,182 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
             return localized("system.review.firewall.enableFirewall", localizer: localizer)
         default:
             return localized("system.review.firewall.fallback", localizer: localizer)
+        }
+    }
+
+    private static func cacheClearDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "rm -rf ~/Library/Caches/*":
+            return localized("system.review.storage.cacheClear.userCaches", localizer: localizer)
+        case "rm -rf /Library/Caches/*":
+            return localized("system.review.storage.cacheClear.sharedCaches", localizer: localizer)
+        default:
+            return localized("system.review.storage.cacheClear.fallback", localizer: localizer)
+        }
+    }
+
+    private static func languageCleanupDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "rm -rf '/System/Library/CoreServices/Language Chooser.app'":
+            return localized("system.review.storage.languageCleanup.removeChooser", localizer: localizer)
+        default:
+            return localized("system.review.storage.languageCleanup.fallback", localizer: localizer)
+        }
+    }
+
+    private static func fontCacheDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "atsutil databases -remove":
+            return localized("system.review.storage.fontCache.removeDatabases", localizer: localizer)
+        case "atsutil server -shutdown":
+            return localized("system.review.storage.fontCache.shutdownServer", localizer: localizer)
+        case "atsutil server -ping":
+            return localized("system.review.storage.fontCache.pingServer", localizer: localizer)
+        default:
+            return localized("system.review.storage.fontCache.fallback", localizer: localizer)
+        }
+    }
+
+    private static func dsStoreCleanupDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "find \"$HOME\" -name '.DS_Store' -delete":
+            return localized("system.review.storage.dsStoreCleanup.deleteFiles", localizer: localizer)
+        default:
+            return localized("system.review.storage.dsStoreCleanup.fallback", localizer: localizer)
+        }
+    }
+
+    private static func spotlightDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "mdutil -a -i off":
+            return localized("system.review.performance.spotlight.disableIndexing", localizer: localizer)
+        default:
+            return localized("system.review.performance.spotlight.fallback", localizer: localizer)
+        }
+    }
+
+    private static func dashboardDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "defaults write com.apple.dashboard mcx-disabled -boolean YES":
+            return localized("system.review.performance.dashboard.disableLegacyDashboard", localizer: localizer)
+        case "killall Dock":
+            return localized("system.review.performance.dashboard.restartDock", localizer: localizer)
+        default:
+            return localized("system.review.performance.dashboard.fallback", localizer: localizer)
+        }
+    }
+
+    private static func animationsDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false":
+            return localized("system.review.performance.animations.disableWindowAnimations", localizer: localizer)
+        case "defaults write NSGlobalDomain NSWindowResizeTime -float 0.001":
+            return localized("system.review.performance.animations.reduceResizeTime", localizer: localizer)
+        case "defaults write com.apple.dock launchanim -bool false":
+            return localized("system.review.performance.animations.disableDockLaunchAnimation", localizer: localizer)
+        case "killall Dock":
+            return localized("system.review.performance.animations.restartDock", localizer: localizer)
+        default:
+            return localized("system.review.performance.animations.fallback", localizer: localizer)
+        }
+    }
+
+    private static func dockOptimizationDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "defaults write com.apple.dock launchanim -bool false":
+            return localized("system.review.performance.dock.disableLaunchAnimation", localizer: localizer)
+        case "defaults write com.apple.dock expose-animation-duration -float 0":
+            return localized("system.review.performance.dock.speedExpose", localizer: localizer)
+        case "defaults write com.apple.dock springboard-show-duration -int 0":
+            return localized("system.review.performance.dock.speedLaunchpadOpen", localizer: localizer)
+        case "defaults write com.apple.dock springboard-hide-duration -int 0":
+            return localized("system.review.performance.dock.speedLaunchpadClose", localizer: localizer)
+        case "killall Dock":
+            return localized("system.review.performance.dock.restartDock", localizer: localizer)
+        default:
+            return localized("system.review.performance.dock.fallback", localizer: localizer)
+        }
+    }
+
+    private static func diskPermissionsDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "diskutil verifyVolume /":
+            return localized("system.review.maintenance.diskPermissions.verifyRootVolume", localizer: localizer)
+        default:
+            return localized("system.review.maintenance.diskPermissions.fallback", localizer: localizer)
+        }
+    }
+
+    private static func maintenanceScriptsDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "periodic daily weekly monthly":
+            return localized("system.review.maintenance.maintenanceScripts.runPeriodicScripts", localizer: localizer)
+        default:
+            return localized("system.review.maintenance.maintenanceScripts.fallback", localizer: localizer)
+        }
+    }
+
+    private static func logCleanupDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "rm -rf /var/log/*":
+            return localized("system.review.maintenance.logCleanup.removeLogs", localizer: localizer)
+        default:
+            return localized("system.review.maintenance.logCleanup.fallback", localizer: localizer)
+        }
+    }
+
+    private static func autobootDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "nvram -p | grep 'AutoBoot' || echo 'AutoBoot status not found'":
+            return localized("system.review.monitoring.autoboot.inspectNvram", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.autoboot.fallback", localizer: localizer)
+        }
+    }
+
+    private static func mdmStatusDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "printf 'Checking /etc/hosts for MDM entries...\\n' && grep -E 'deviceenrollment.apple.com|mdmenrollment.apple.com|iprofiles.apple.com' /etc/hosts || true":
+            return localized("system.review.monitoring.mdmStatus.inspectHosts", localizer: localizer)
+        case "profiles show -type enrollment":
+            return localized("system.review.monitoring.mdmStatus.readProfiles", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.mdmStatus.fallback", localizer: localizer)
+        }
+    }
+
+    private static func cpuSnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "printf 'CPU Model: '; sysctl -n machdep.cpu.brand_string":
+            return localized("system.review.monitoring.cpu.model", localizer: localizer)
+        case "printf 'CPU Cores: '; sysctl -n hw.ncpu":
+            return localized("system.review.monitoring.cpu.cores", localizer: localizer)
+        case "top -l 1 | awk '/^CPU/ {print}'":
+            return localized("system.review.monitoring.cpu.liveUsage", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.cpu.fallback", localizer: localizer)
+        }
+    }
+
+    private static func memorySnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "printf 'Total RAM: '; sysctl -n hw.memsize | awk '{print $1 / 1024/1024/1024 \"GB\"}'":
+            return localized("system.review.monitoring.memory.totalRam", localizer: localizer)
+        case "vm_stat":
+            return localized("system.review.monitoring.memory.vmStat", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.memory.fallback", localizer: localizer)
+        }
+    }
+
+    private static func batterySnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case "pmset -g batt":
+            return localized("system.review.monitoring.battery.batteryStatus", localizer: localizer)
+        case "system_profiler SPPowerDataType | grep -E 'Cycle Count|Condition|Charge Remaining|Charging|Full Charge Capacity|Battery Installed'":
+            return localized("system.review.monitoring.battery.healthDetails", localizer: localizer)
+        default:
+            return localized("system.review.monitoring.battery.fallback", localizer: localizer)
         }
     }
 

@@ -57,6 +57,31 @@ final class OptimizationEngineTests: XCTestCase {
             """
         )
     }
+
+    func testCpuInspectionActionReturnsStructuredSummaryAndPreservesTranscript() async throws {
+        let executor = MockSystemCommandExecutor(
+            output: """
+            CPU Model: Apple M2 Pro
+            CPU Cores: 12
+            CPU usage: 4.6% user, 9.1% sys, 86.3% idle
+            """,
+            exitCode: 0
+        )
+        let engine = OptimizationEngine(
+            commandExecutor: executor,
+            stateStore: InMemoryStateStore(),
+            feedbackPresenter: ActionFeedbackPresenter(localizer: AppLocalizer(language: .english))
+        )
+
+        let action = OptimizationCatalog.actions().first(where: { $0.id == "system_check_cpu" })!
+        let result = try await engine.execute(action)
+
+        XCTAssertEqual(result.summary?.primaryValue, "Apple M2 Pro")
+        XCTAssertEqual(result.summary?.secondaryValues.first?.value, "12")
+        XCTAssertTrue(result.summary?.secondaryValues.last?.value.contains("86.3% idle") == true)
+        XCTAssertTrue(result.debugLog?.contains("CPU Model: Apple M2 Pro") == true)
+        XCTAssertEqual(result.toast.summaryLines.first, "Apple M2 Pro")
+    }
 }
 
 private struct MockSystemCommandExecutor: SystemCommandExecuting {
