@@ -53,6 +53,22 @@ enum ActionAvailability: Hashable {
     }
 }
 
+enum ActionRestoreBehavior: Hashable {
+    case staticCommands([CommandRequest])
+    case capturedSysctl(keys: [String], additionalRequests: [CommandRequest] = [])
+    case notRestorableInspection(reasonKey: String)
+    case notRestorableIrreversible(reasonKey: String)
+
+    var isRestorable: Bool {
+        switch self {
+        case .staticCommands, .capturedSysctl:
+            return true
+        case .notRestorableInspection, .notRestorableIrreversible:
+            return false
+        }
+    }
+}
+
 struct OptimizationAction: Identifiable, Hashable {
     let id: String
     let titleKey: String
@@ -64,6 +80,7 @@ struct OptimizationAction: Identifiable, Hashable {
     let estimatedTime: String
     let requiresRestart: Bool
     let availability: ActionAvailability
+    let restoreBehavior: ActionRestoreBehavior
     let kind: ActionKind
     var status: ActionStatus
     var lastRunDescription: String?
@@ -79,6 +96,7 @@ struct OptimizationAction: Identifiable, Hashable {
         estimatedTime: String,
         requiresRestart: Bool,
         availability: ActionAvailability = .allMacs,
+        restoreBehavior: ActionRestoreBehavior = .notRestorableInspection(reasonKey: "restore.reason.inspection"),
         kind: ActionKind,
         status: ActionStatus,
         lastRunDescription: String? = nil
@@ -93,6 +111,7 @@ struct OptimizationAction: Identifiable, Hashable {
         self.estimatedTime = estimatedTime
         self.requiresRestart = requiresRestart
         self.availability = availability
+        self.restoreBehavior = restoreBehavior
         self.kind = kind
         self.status = status
         self.lastRunDescription = lastRunDescription
@@ -118,6 +137,7 @@ struct OptimizationAction: Identifiable, Hashable {
             estimatedTime: estimatedTime,
             requiresRestart: requiresRestart,
             availability: availability,
+            restoreBehavior: restoreBehavior,
             kind: .command(commandRequests),
             status: status,
             lastRunDescription: lastRunDescription
@@ -190,6 +210,48 @@ struct ToastMessage: Identifiable, Equatable {
     }
 }
 
+struct DebugLogEntry: Identifiable, Equatable {
+    let id: UUID
+    let actionID: String?
+    let title: String
+    let symbolName: String
+    let kind: PresentedActionResultKind
+    let prompt: String
+    let output: String
+    let timestamp: Date
+
+    init(
+        id: UUID = UUID(),
+        actionID: String? = nil,
+        title: String,
+        symbolName: String,
+        kind: PresentedActionResultKind,
+        prompt: String,
+        output: String,
+        timestamp: Date = .now
+    ) {
+        self.id = id
+        self.actionID = actionID
+        self.title = title
+        self.symbolName = symbolName
+        self.kind = kind
+        self.prompt = prompt
+        self.output = output
+        self.timestamp = timestamp
+    }
+
+    var transcript: String {
+        let promptLine = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let outputBody = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if outputBody.isEmpty {
+            return "$ \(promptLine)"
+        }
+
+        return "$ \(promptLine)\n\(outputBody)"
+    }
+}
+
 struct ActionResultSummary: Equatable {
     struct LineItem: Equatable {
         let labelKey: LocalizedKey
@@ -232,6 +294,28 @@ struct PresentedActionResult: Identifiable, Equatable {
         self.symbolName = symbolName
         self.summary = summary
         self.details = details
+    }
+}
+
+struct QuickPanelState: Equatable {
+    let title: String
+    let symbolName: String
+    let summary: ActionResultSummary?
+    let details: String?
+    let resultKind: PresentedActionResultKind
+
+    init(
+        title: String,
+        symbolName: String,
+        summary: ActionResultSummary? = nil,
+        details: String? = nil,
+        resultKind: PresentedActionResultKind = .info
+    ) {
+        self.title = title
+        self.symbolName = symbolName
+        self.summary = summary
+        self.details = details
+        self.resultKind = resultKind
     }
 }
 

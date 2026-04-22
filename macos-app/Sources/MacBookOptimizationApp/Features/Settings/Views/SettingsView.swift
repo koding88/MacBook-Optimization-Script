@@ -1,6 +1,7 @@
 import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettingsStore
+    @EnvironmentObject private var model: OptimizationDashboardViewModel
     @Environment(\.dismiss) private var dismiss
 
     private let refreshOptions = AppSettingsStore.allowedRefreshIntervalMinutes
@@ -80,10 +81,18 @@ struct SettingsView: View {
                 }
 
                 settingsSection(localizer.text(.safetySection)) {
-                    settingsRow(localizer.text(.confirmPrivilegedLabel)) {
-                        Toggle("", isOn: $settings.confirmPrivilegedActions)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
+                    VStack(alignment: .leading, spacing: rowSpacing) {
+                        settingsRow(localizer.text(.confirmPrivilegedLabel)) {
+                            Toggle("", isOn: $settings.confirmPrivilegedActions)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+
+                        Button(localizer.text(.resetDefaultsAllButton)) {
+                            dismiss()
+                            model.resetAllToDefaults()
+                        }
+                        .buttonStyle(.bordered)
                     }
                 }
 

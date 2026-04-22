@@ -115,6 +115,10 @@ private final class InMemoryStateStore: StateStoreProtocol {
         states[featureID] = FeatureState(status: status.rawValue.lowercased(), timestamp: formatter.string(from: timestamp))
     }
 
+    func removeState(featureID: String) throws {
+        states[featureID] = nil
+    }
+
     func resetStates() throws {
         states.removeAll()
     }

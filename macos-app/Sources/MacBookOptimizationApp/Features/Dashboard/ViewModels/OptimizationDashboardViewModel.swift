@@ -1,6 +1,6 @@
+import Combine
 import Foundation
 import SwiftUI
-import Combine
 
 enum SidebarDestination: Hashable {
     case category(ActionCategory)
@@ -24,19 +24,6 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
         var id: String { rawValue }
 
-        var title: String {
-            switch self {
-            case .last5Minutes:
-                return AppLocalizer(language: .english).text(.activityFilterLast5Minutes)
-            case .all:
-                return AppLocalizer(language: .english).text(.activityFilterAll)
-            case .lastHour:
-                return AppLocalizer(language: .english).text(.activityFilterLastHour)
-            case .today:
-                return AppLocalizer(language: .english).text(.activityFilterToday)
-            }
-        }
-
         func includes(_ date: Date, now: Date = .now) -> Bool {
             switch self {
             case .last5Minutes:
@@ -51,10 +38,43 @@ final class OptimizationDashboardViewModel: ObservableObject {
         }
     }
 
+    private enum ExecutionIntent {
+        case run(OptimizationAction)
+        case restore(action: OptimizationAction, affectedActionIDs: [String])
+
+        var action: OptimizationAction {
+            switch self {
+            case .run(let action):
+                return action
+            case .restore(let action, _):
+                return action
+            }
+        }
+
+        var affectedActionIDs: [String] {
+            switch self {
+            case .run(let action):
+                return [action.id]
+            case .restore(_, let affectedActionIDs):
+                return affectedActionIDs
+            }
+        }
+
+        var reviewMode: SystemActionReviewMode {
+            switch self {
+            case .run:
+                return .run
+            case .restore:
+                return .restore
+            }
+        }
+    }
+
     @Published var selectedDestination: SidebarDestination = .dashboard
     @Published var actions: [OptimizationAction]
     @Published var machineSummary: MachineSummary?
     @Published var debugOutput = ""
+    @Published var debugLogEntries: [DebugLogEntry] = []
     @Published var isRunningActionID: String?
     @Published var pendingSystemActionReview: SystemActionReviewPlan?
     @Published var pendingConfirmationAction: OptimizationAction?
@@ -74,28 +94,36 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     private let engine: OptimizationExecuting
     private let stateStore: StateStoreProtocol
+    private let restoreBaselineStore: RestoreBaselineStoreProtocol
     private let settings: AppSettingsStore
     private let systemInfoProvider: SystemInfoProviding
+    private let commandExecutor: SystemCommandExecuting
     private var cancellables: Set<AnyCancellable> = []
     private var refreshTask: Task<Void, Never>?
+    private var pendingConfirmationIntent: ExecutionIntent?
+    private var latestQuickPanelStates: [String: QuickPanelState] = [:]
 
     private var localizer: AppLocalizer {
         AppLocalizer(language: settings.language)
     }
 
     init(
-        engine: OptimizationExecuting = OptimizationEngine(
-            commandExecutor: SystemCommandExecutor(),
-            stateStore: StateStore()
-        ),
+        engine: (any OptimizationExecuting)? = nil,
         stateStore: StateStoreProtocol = StateStore(),
+        restoreBaselineStore: RestoreBaselineStoreProtocol = RestoreBaselineStore(),
         settings: AppSettingsStore = AppSettingsStore(),
-        systemInfoProvider: SystemInfoProviding = SystemInfoProvider()
+        systemInfoProvider: SystemInfoProviding = SystemInfoProvider(),
+        commandExecutor: SystemCommandExecuting = SystemCommandExecutor()
     ) {
-        self.engine = engine
         self.stateStore = stateStore
+        self.restoreBaselineStore = restoreBaselineStore
         self.settings = settings
         self.systemInfoProvider = systemInfoProvider
+        self.commandExecutor = commandExecutor
+        self.engine = engine ?? OptimizationEngine(
+            commandExecutor: commandExecutor,
+            stateStore: stateStore
+        )
         self.actions = OptimizationCatalog.actions()
         loadStatusesFromDisk()
         setupBindings()
@@ -122,21 +150,77 @@ final class OptimizationDashboardViewModel: ObservableObject {
         switch selectedDestination {
         case .category(let category):
             return actions.filter { $0.category == category }
-        case .cpu:
-            return actions.filter { $0.id == "system_check_cpu" }
-        case .memory:
-            return actions.filter { $0.id == "system_check_memory" }
-        case .battery:
-            return actions.filter { $0.id == "system_check_battery" }
-        case .mdm:
-            return actions.filter { $0.id == "mdm_status" }
         default:
             return []
         }
     }
 
+    var selectedQuickPanelAction: OptimizationAction? {
+        let actionID: String?
+        switch selectedDestination {
+        case .cpu:
+            actionID = "system_check_cpu"
+        case .memory:
+            actionID = "system_check_memory"
+        case .battery:
+            actionID = "system_check_battery"
+        case .mdm:
+            actionID = "mdm_status"
+        default:
+            actionID = nil
+        }
+
+        guard let actionID else { return nil }
+        return actions.first(where: { $0.id == actionID })
+    }
+
     var filteredActivity: [ActivityItem] {
         activityFeed.filter { activityFilter.includes($0.date) }
+    }
+
+    var logsTranscript: String {
+        guard !debugLogEntries.isEmpty else {
+            return localizer.text(.noOutputYet)
+        }
+
+        return debugLogEntries
+            .sorted { $0.timestamp < $1.timestamp }
+            .map { entry in
+                let timestamp = entry.timestamp.formatted(date: .omitted, time: .standard)
+                return "# \(timestamp) • \(entry.title)\n\(entry.transcript)"
+            }
+            .joined(separator: "\n\n")
+    }
+
+    var shouldConfirmQuit: Bool {
+        isRunningActionID != nil
+            || pendingSystemActionReview != nil
+            || pendingConfirmationAction != nil
+            || presentedActionResult != nil
+    }
+
+    func quitConfirmationMessage() -> String {
+        if isRunningActionID != nil {
+            return localizer.text(.quitConfirmRunningMessage)
+        }
+        if pendingSystemActionReview != nil {
+            return localizer.text(.quitConfirmReviewMessage)
+        }
+        if pendingConfirmationAction != nil {
+            return localizer.text(.quitConfirmPrivilegeMessage)
+        }
+        if presentedActionResult != nil {
+            return localizer.text(.quitConfirmResultMessage)
+        }
+        return localizer.text(.quitConfirmGenericMessage)
+    }
+
+    func quickPanelState(for actionID: String) -> QuickPanelState? {
+        latestQuickPanelStates[actionID]
+    }
+
+    func latestLogEntry(for actionID: String) -> DebugLogEntry? {
+        debugLogEntries.last(where: { $0.actionID == actionID })
     }
 
     func isActionAvailable(_ action: OptimizationAction) -> Bool {
@@ -154,8 +238,26 @@ final class OptimizationDashboardViewModel: ObservableObject {
         }
     }
 
-    func showCategory(_ category: ActionCategory) {
-        selectedDestination = .category(category)
+    func restoreMessage(for action: OptimizationAction) -> String? {
+        guard isActionAvailable(action) else {
+            return unavailableMessage(for: action)
+        }
+
+        switch action.restoreBehavior {
+        case .staticCommands:
+            return nil
+        case .capturedSysctl:
+            if (try? restoreBaselineStore.loadBaseline(for: action.id)) != nil {
+                return nil
+            }
+            return localizer.text(.restoreRunFirstRequired)
+        case .notRestorableInspection(let reasonKey), .notRestorableIrreversible(let reasonKey):
+            return localizer.string(reasonKey)
+        }
+    }
+
+    func canRestore(_ action: OptimizationAction) -> Bool {
+        restoreMessage(for: action) == nil
     }
 
     func showDestination(_ destination: SidebarDestination) {
@@ -170,14 +272,6 @@ final class OptimizationDashboardViewModel: ObservableObject {
         do {
             try stateStore.resetStates()
             loadStatusesFromDisk()
-            enqueueToast(
-                ToastMessage(
-                    type: .success,
-                    title: localizer.text(.statusReset),
-                    message: localizer.text(.statusResetMessage),
-                    dismissAfter: 3
-                )
-            )
             appendActivity(
                 title: localizer.text(.statusReset),
                 message: localizer.text(.statusResetMessage),
@@ -192,13 +286,6 @@ final class OptimizationDashboardViewModel: ObservableObject {
             )
         } catch {
             debugOutput = error.localizedDescription
-            enqueueToast(
-                ToastMessage(
-                    type: .error,
-                    title: localizer.text(.statusReset),
-                    message: localizer.text(.statusResetFailedMessage)
-                )
-            )
             appendActivity(
                 title: localizer.text(.statusReset),
                 message: localizer.text(.statusResetFailedMessage),
@@ -223,6 +310,14 @@ final class OptimizationDashboardViewModel: ObservableObject {
         toasts.removeAll { $0.id == id }
     }
 
+    func deleteActivity(id: ActivityItem.ID) {
+        activityFeed.removeAll { $0.id == id }
+    }
+
+    func clearAllActivity() {
+        activityFeed.removeAll()
+    }
+
     func run(actionID: String) async {
         guard let action = actions.first(where: { $0.id == actionID }), isRunningActionID == nil else { return }
 
@@ -236,18 +331,63 @@ final class OptimizationDashboardViewModel: ObservableObject {
             return
         }
 
+        let intent = ExecutionIntent.run(action)
         if settings.confirmPrivilegedActions && (action.isRisky || action.kind.requiresAdministrator) {
-            pendingConfirmationAction = action
+            queueConfirmation(intent)
             return
         }
 
-        await run(action)
+        await execute(intent)
+    }
+
+    func restore(actionID: String) {
+        guard let action = actions.first(where: { $0.id == actionID }) else { return }
+        guard isActionAvailable(action) else {
+            presentUnavailableResult(for: action)
+            return
+        }
+        guard let requests = resolveRestoreRequests(for: action) else {
+            presentRestoreUnavailableResult(for: action)
+            return
+        }
+        guard let review = SystemActionReviewPlan.buildRestore(for: action, requests: requests, localizer: localizer) else {
+            presentRestoreUnavailableResult(for: action)
+            return
+        }
+        pendingSystemActionReview = review
+    }
+
+    func restoreSelectedCategory() {
+        let category = selectedCategory
+        let actionRequests = restoreCandidates(in: category)
+        guard !actionRequests.isEmpty else {
+            presentNoRestorableActionsResult(title: localizer.format(.restoreCategoryTitle, category.rawValue))
+            return
+        }
+        pendingSystemActionReview = SystemActionReviewPlan.buildRestoreCategory(
+            category: category,
+            actionRequests: actionRequests,
+            localizer: localizer
+        )
+    }
+
+    func resetAllToDefaults() {
+        let actionRequests = restoreCandidates(in: nil)
+        guard !actionRequests.isEmpty else {
+            presentNoRestorableActionsResult(title: localizer.text(.resetDefaultsAllTitle))
+            return
+        }
+        pendingSystemActionReview = SystemActionReviewPlan.buildRestoreAll(
+            actionRequests: actionRequests,
+            localizer: localizer
+        )
     }
 
     func confirmPendingAction() {
-        guard let action = pendingConfirmationAction else { return }
+        guard let intent = pendingConfirmationIntent else { return }
         pendingConfirmationAction = nil
-        Task { await run(action) }
+        pendingConfirmationIntent = nil
+        Task { await execute(intent) }
     }
 
     func cancelSystemActionReview() {
@@ -278,15 +418,23 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     func confirmSystemActionReview() {
         guard let review = pendingSystemActionReview, review.hasSelection else { return }
-        let action = review.action.replacing(commandRequests: review.selectedRequests)
         pendingSystemActionReview = nil
 
-        if settings.confirmPrivilegedActions && (action.isRisky || action.kind.requiresAdministrator) {
-            pendingConfirmationAction = action
+        let preparedAction = review.action.replacing(commandRequests: review.selectedRequests)
+        let intent: ExecutionIntent
+        switch review.mode {
+        case .run:
+            intent = .run(preparedAction)
+        case .restore:
+            intent = .restore(action: preparedAction, affectedActionIDs: review.affectedActionIDs)
+        }
+
+        if settings.confirmPrivilegedActions && preparedAction.kind.requiresAdministrator {
+            queueConfirmation(intent)
             return
         }
 
-        Task { await run(action) }
+        Task { await execute(intent) }
     }
 
     func cancelPendingAction() {
@@ -298,11 +446,20 @@ final class OptimizationDashboardViewModel: ObservableObject {
             symbolName: "xmark.circle"
         )
         pendingConfirmationAction = nil
+        pendingConfirmationIntent = nil
     }
 
     func refreshStatuses() async {
         loadStatusesFromDisk()
         await loadMachineSummary()
+        enqueueToast(
+            ToastMessage(
+                type: .info,
+                title: localizer.text(.statusRefreshedTitle),
+                message: localizer.text(.statusRefreshedMessage),
+                dismissAfter: 3
+            )
+        )
         appendActivity(
             title: localizer.text(.statusRefreshedTitle),
             message: localizer.text(.statusRefreshedMessage),
@@ -311,20 +468,28 @@ final class OptimizationDashboardViewModel: ObservableObject {
         )
     }
 
-    private func run(_ action: OptimizationAction) async {
-        guard isActionAvailable(action) else {
-            presentUnavailableResult(for: action)
-            return
+    private func queueConfirmation(_ intent: ExecutionIntent) {
+        pendingConfirmationAction = intent.action
+        pendingConfirmationIntent = intent
+    }
+
+    private func execute(_ intent: ExecutionIntent) async {
+        let action = intent.action
+        let previousStatuses = statusSnapshot(for: intent.affectedActionIDs)
+
+        if case .run(let runAction) = intent {
+            await captureRestoreBaselineIfNeeded(for: runAction)
         }
 
-        let previousStatus = action.status
         presentedActionResult = nil
-        updateStatus(for: action.id, to: .running)
+        beginRunning(for: intent)
         appendActivity(
-            title: localizer.text(.runningActionTitle),
-            message: localizer.format(.runningActionMessage, localizer.string(action.titleKey)),
+            title: intent.reviewMode == .restore ? localizer.text(.restoreActivityTitle) : localizer.text(.runningActionTitle),
+            message: intent.reviewMode == .restore
+                ? localizer.format(.restoreActivityMessage, localizer.string(action.titleKey))
+                : localizer.format(.runningActionMessage, localizer.string(action.titleKey)),
             kind: .info,
-            symbolName: "play.circle"
+            symbolName: intent.reviewMode == .restore ? "arrow.uturn.backward.circle" : "play.circle"
         )
 
         if action.kind.requiresAdministrator {
@@ -348,15 +513,84 @@ final class OptimizationDashboardViewModel: ObservableObject {
         do {
             let result = try await engine.execute(action)
             debugOutput = result.output.isEmpty ? localizer.text(.actionCompletedWithoutOutput) : result.output
-            updateStatus(for: action.id, to: result.status)
-            loadStatusesFromDisk()
-            enqueueToast(result.toast)
+            recordDebugOutput(
+                actionID: originalActionID(for: intent),
+                title: localizer.string(action.titleKey),
+                symbolName: action.symbolName,
+                kind: intent.reviewMode == .restore ? .success : (result.summary == nil ? .success : .info),
+                prompt: prompt(for: intent, title: localizer.string(action.titleKey)),
+                output: debugOutput
+            )
+
+            switch intent {
+            case .run(let originalAction):
+                finishRunResult(result, for: originalAction)
+            case .restore(_, let affectedActionIDs):
+                try applyRestoreSuccess(to: affectedActionIDs)
+                presentActionResult(
+                    result,
+                    for: action,
+                    message: localizer.text(.restoreCompletedMessage),
+                    kind: .success
+                )
+            }
+
             appendActivity(event: result.activityEvent)
-            presentActionResult(result, for: action)
         } catch {
             debugOutput = error.localizedDescription
-            handleExecutionError(error, for: action, previousStatus: previousStatus)
-            presentExecutionError(error, for: action)
+            recordDebugOutput(
+                actionID: originalActionID(for: intent),
+                title: localizer.string(action.titleKey),
+                symbolName: action.symbolName,
+                kind: .error,
+                prompt: prompt(for: intent, title: localizer.string(action.titleKey)),
+                output: error.localizedDescription
+            )
+            handleExecutionError(
+                error,
+                for: action,
+                previousStatuses: previousStatuses,
+                reviewMode: intent.reviewMode
+            )
+            presentExecutionError(error, for: action, reviewMode: intent.reviewMode)
+        }
+    }
+
+    private func beginRunning(for intent: ExecutionIntent) {
+        switch intent {
+        case .run(let action):
+            updateStatus(for: action.id, to: .running)
+        case .restore(let action, let affectedActionIDs):
+            if affectedActionIDs.count == 1, let actionID = affectedActionIDs.first {
+                updateStatus(for: actionID, to: .running)
+            } else {
+                isRunningActionID = action.id
+            }
+        }
+    }
+
+    private func finishRunResult(_ result: ActionExecutionResult, for action: OptimizationAction) {
+        updateStatus(for: action.id, to: result.status)
+        loadStatusesFromDisk()
+        if let resultState = makeQuickPanelState(from: result, action: action) {
+            latestQuickPanelStates[action.id] = resultState
+        }
+        presentActionResult(result, for: action)
+    }
+
+    private func applyRestoreSuccess(to actionIDs: [String]) throws {
+        isRunningActionID = nil
+        for actionID in actionIDs {
+            if let featureID = actions.first(where: { $0.id == actionID })?.statusFeatureID {
+                try stateStore.removeState(featureID: featureID)
+            }
+        }
+        try restoreBaselineStore.removeBaselines(for: actionIDs)
+        loadStatusesFromDisk()
+        for actionID in actionIDs {
+            guard let index = actions.firstIndex(where: { $0.id == actionID }) else { continue }
+            actions[index].status = .ready
+            actions[index].lastRunDescription = nil
         }
     }
 
@@ -380,7 +614,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     private func appendActivity(event: ActivityEvent) {
         activityFeed.insert(ActivityItem(event: event), at: 0)
-        activityFeed = Array(activityFeed.prefix(40))
+        activityFeed = Array(activityFeed.prefix(80))
     }
 
     private func presentUnavailableResult(for action: OptimizationAction) {
@@ -395,14 +629,6 @@ final class OptimizationDashboardViewModel: ObservableObject {
         }
 
         debugOutput = message
-        enqueueToast(
-            ToastMessage(
-                type: .warning,
-                title: localizer.text(.actionUnavailableTitle),
-                message: localizer.format(.actionUnavailableIntelOnlyMessage, actionTitle),
-                dismissAfter: 4
-            )
-        )
         appendActivity(
             title: localizer.text(.actionUnavailableTitle),
             message: localizer.format(.actionUnavailableIntelOnlyMessage, actionTitle),
@@ -415,6 +641,37 @@ final class OptimizationDashboardViewModel: ObservableObject {
             message: message,
             symbolName: action.symbolName
         )
+        latestQuickPanelStates[action.id] = QuickPanelState(
+            title: actionTitle,
+            symbolName: action.symbolName,
+            details: message,
+            resultKind: .warning
+        )
+    }
+
+    private func presentRestoreUnavailableResult(for action: OptimizationAction) {
+        let message = restoreMessage(for: action) ?? localizer.text(.restoreUnavailableMessage)
+        appendActivity(
+            title: localizer.text(.restoreUnavailableTitle),
+            message: message,
+            kind: .warning,
+            symbolName: "arrow.uturn.backward.circle.badge.exclamationmark"
+        )
+        presentedActionResult = PresentedActionResult(
+            kind: .warning,
+            title: localizer.format(.restoreActionTitle, localizer.string(action.titleKey)),
+            message: message,
+            symbolName: action.symbolName
+        )
+    }
+
+    private func presentNoRestorableActionsResult(title: String) {
+        presentedActionResult = PresentedActionResult(
+            kind: .warning,
+            title: title,
+            message: localizer.text(.restoreNothingAvailableMessage),
+            symbolName: "arrow.uturn.backward.circle"
+        )
     }
 
     private func enqueueToast(_ toast: ToastMessage) {
@@ -422,29 +679,33 @@ final class OptimizationDashboardViewModel: ObservableObject {
         toasts = Array(toasts.prefix(5))
     }
 
-    private func presentActionResult(_ result: ActionExecutionResult, for action: OptimizationAction) {
+    private func presentActionResult(
+        _ result: ActionExecutionResult,
+        for action: OptimizationAction,
+        message: String? = nil,
+        kind: PresentedActionResultKind? = nil
+    ) {
         let details = result.debugLog?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasSummary = result.summary != nil
-        let kind: PresentedActionResultKind = hasSummary ? .info : .success
-        let message: String
-
-        if hasSummary {
-            message = localizer.text(.resultDialogInspectionMessage)
-        } else {
-            message = localizer.text(.resultDialogCompletedMessage)
-        }
+        let resolvedKind: PresentedActionResultKind = kind ?? (hasSummary ? .info : .success)
+        let resolvedMessage = message
+            ?? (hasSummary ? localizer.text(.resultDialogInspectionMessage) : localizer.text(.resultDialogCompletedMessage))
 
         presentedActionResult = PresentedActionResult(
-            kind: kind,
+            kind: resolvedKind,
             title: localizer.string(action.titleKey),
-            message: message,
+            message: resolvedMessage,
             symbolName: action.symbolName,
             summary: result.summary,
             details: details?.isEmpty == true ? nil : details
         )
     }
 
-    private func presentExecutionError(_ error: Error, for action: OptimizationAction) {
+    private func presentExecutionError(
+        _ error: Error,
+        for action: OptimizationAction,
+        reviewMode: SystemActionReviewMode
+    ) {
         let title = localizer.string(action.titleKey)
         let kind: PresentedActionResultKind
         let message: String
@@ -454,20 +715,28 @@ final class OptimizationDashboardViewModel: ObservableObject {
             switch systemError {
             case .administratorAuthorizationCancelled:
                 kind = .warning
-                message = localizer.text(.resultDialogAdministratorCancelledMessage)
+                message = reviewMode == .restore
+                    ? localizer.text(.restoreAdministratorCancelledMessage)
+                    : localizer.text(.resultDialogAdministratorCancelledMessage)
                 details = nil
             case .administratorExecutionFailed(let output):
                 kind = .error
-                message = localizer.text(.resultDialogFailedMessage)
+                message = reviewMode == .restore
+                    ? localizer.text(.restoreFailedMessage)
+                    : localizer.text(.resultDialogFailedMessage)
                 details = output.trimmingCharacters(in: .whitespacesAndNewlines)
             case .invalidCommand(let command):
                 kind = .error
-                message = localizer.text(.resultDialogFailedMessage)
+                message = reviewMode == .restore
+                    ? localizer.text(.restoreFailedMessage)
+                    : localizer.text(.resultDialogFailedMessage)
                 details = command.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         } else {
             kind = .error
-            message = localizer.text(.resultDialogFailedMessage)
+            message = reviewMode == .restore
+                ? localizer.text(.restoreFailedMessage)
+                : localizer.text(.resultDialogFailedMessage)
             details = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
@@ -478,42 +747,42 @@ final class OptimizationDashboardViewModel: ObservableObject {
             symbolName: action.symbolName,
             details: details?.isEmpty == true ? nil : details
         )
+        latestQuickPanelStates[action.id] = QuickPanelState(
+            title: title,
+            symbolName: action.symbolName,
+            details: details?.isEmpty == true ? message : details,
+            resultKind: kind
+        )
     }
 
-    private func handleExecutionError(_ error: Error, for action: OptimizationAction, previousStatus: ActionStatus) {
+    private func handleExecutionError(
+        _ error: Error,
+        for action: OptimizationAction,
+        previousStatuses: [String: ActionStatus],
+        reviewMode: SystemActionReviewMode
+    ) {
         let actionTitle = localizer.string(action.titleKey)
 
         if let systemError = error as? SystemCommandExecutorError {
             switch systemError {
             case .administratorAuthorizationCancelled:
-                updateStatus(for: action.id, to: previousStatus)
-                enqueueToast(
-                    ToastMessage(
-                        type: .warning,
-                        title: localizer.text(.administratorCancelledTitle),
-                        message: localizer.format(.administratorCancelledMessage, actionTitle),
-                        dismissAfter: 4
-                    )
-                )
+                restoreStatuses(previousStatuses)
                 appendActivity(
                     title: localizer.text(.administratorCancelledTitle),
-                    message: localizer.format(.administratorCancelledMessage, actionTitle),
+                    message: reviewMode == .restore
+                        ? localizer.format(.restoreAdministratorCancelledDetail, actionTitle)
+                        : localizer.format(.administratorCancelledMessage, actionTitle),
                     kind: .warning,
                     symbolName: "xmark.shield"
                 )
                 return
             case .administratorExecutionFailed:
-                updateStatus(for: action.id, to: .failed)
-                enqueueToast(
-                    ToastMessage(
-                        type: .error,
-                        title: localizer.text(.actionFailedTitle),
-                        message: localizer.format(.actionFailedAdministratorMessage, actionTitle)
-                    )
-                )
+                restoreStatuses(previousStatuses, failedActionID: action.id)
                 appendActivity(
-                    title: localizer.text(.actionFailedTitle),
-                    message: localizer.format(.actionFailedAdministratorMessage, actionTitle),
+                    title: reviewMode == .restore ? localizer.text(.restoreFailedTitle) : localizer.text(.actionFailedTitle),
+                    message: reviewMode == .restore
+                        ? localizer.format(.restoreFailedDetail, actionTitle)
+                        : localizer.format(.actionFailedAdministratorMessage, actionTitle),
                     kind: .failure,
                     symbolName: "xmark.octagon"
                 )
@@ -523,17 +792,12 @@ final class OptimizationDashboardViewModel: ObservableObject {
             }
         }
 
-        updateStatus(for: action.id, to: .failed)
-        enqueueToast(
-            ToastMessage(
-                type: .error,
-                title: localizer.text(.actionFailedTitle),
-                message: localizer.format(.actionFailedMessage, actionTitle)
-            )
-        )
+        restoreStatuses(previousStatuses, failedActionID: action.id)
         appendActivity(
-            title: localizer.text(.actionFailedTitle),
-            message: localizer.format(.actionFailedMessage, actionTitle),
+            title: reviewMode == .restore ? localizer.text(.restoreFailedTitle) : localizer.text(.actionFailedTitle),
+            message: reviewMode == .restore
+                ? localizer.format(.restoreFailedDetail, actionTitle)
+                : localizer.format(.actionFailedMessage, actionTitle),
             kind: .failure,
             symbolName: "xmark.octagon"
         )
@@ -595,6 +859,143 @@ final class OptimizationDashboardViewModel: ObservableObject {
                 guard !Task.isCancelled else { break }
                 await self?.refreshStatuses()
             }
+        }
+    }
+
+    private func captureRestoreBaselineIfNeeded(for action: OptimizationAction) async {
+        guard engine is OptimizationEngine else { return }
+        guard case .capturedSysctl(let keys, _) = action.restoreBehavior else { return }
+        guard (try? restoreBaselineStore.loadBaseline(for: action.id)) == nil else { return }
+
+        var values: [String: String] = [:]
+        for key in keys {
+            do {
+                let result = try await commandExecutor.execute(
+                    CommandRequest(command: "sysctl -n \(key)", requiresAdministrator: false)
+                )
+                let value = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty {
+                    values[key] = value
+                }
+            } catch {
+                continue
+            }
+        }
+
+        guard !values.isEmpty else { return }
+        try? restoreBaselineStore.saveBaseline(
+            RestoreBaseline(capturedAt: .now, values: values),
+            for: action.id
+        )
+    }
+
+    private func resolveRestoreRequests(for action: OptimizationAction) -> [CommandRequest]? {
+        switch action.restoreBehavior {
+        case .staticCommands(let requests):
+            return requests
+        case .capturedSysctl(_, let additionalRequests):
+            guard let baseline = try? restoreBaselineStore.loadBaseline(for: action.id) else {
+                return nil
+            }
+
+            let sysctlRequests = baseline.values
+                .sorted { $0.key < $1.key }
+                .map { key, value in
+                    CommandRequest(command: "sysctl -w \(key)=\(value)", requiresAdministrator: true)
+                }
+
+            return sysctlRequests + additionalRequests
+        case .notRestorableInspection, .notRestorableIrreversible:
+            return nil
+        }
+    }
+
+    private func restoreCandidates(in category: ActionCategory?) -> [(OptimizationAction, [CommandRequest])] {
+        let candidateActions = actions.filter { action in
+            if let category {
+                return action.category == category
+            }
+            return true
+        }
+
+        return candidateActions.compactMap { action in
+            guard isActionAvailable(action), let requests = resolveRestoreRequests(for: action) else {
+                return nil
+            }
+            return (action, requests)
+        }
+    }
+
+    private func restoreStatuses(_ previousStatuses: [String: ActionStatus], failedActionID: String? = nil) {
+        isRunningActionID = nil
+        for (actionID, status) in previousStatuses {
+            if failedActionID == actionID {
+                updateStatus(for: actionID, to: .failed)
+            } else {
+                updateStatus(for: actionID, to: status)
+            }
+        }
+    }
+
+    private func statusSnapshot(for actionIDs: [String]) -> [String: ActionStatus] {
+        Dictionary(uniqueKeysWithValues: actionIDs.compactMap { actionID in
+            guard let action = actions.first(where: { $0.id == actionID }) else { return nil }
+            return (actionID, action.status)
+        })
+    }
+
+    private func makeQuickPanelState(from result: ActionExecutionResult, action: OptimizationAction) -> QuickPanelState? {
+        guard ["system_check_cpu", "system_check_memory", "system_check_battery", "mdm_status"].contains(action.id) else {
+            return nil
+        }
+
+        return QuickPanelState(
+            title: localizer.string(action.titleKey),
+            symbolName: action.symbolName,
+            summary: result.summary,
+            details: result.debugLog,
+            resultKind: result.summary == nil ? .success : .info
+        )
+    }
+
+    private func recordDebugOutput(
+        actionID: String?,
+        title: String,
+        symbolName: String,
+        kind: PresentedActionResultKind,
+        prompt: String,
+        output: String
+    ) {
+        let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedOutput.isEmpty else { return }
+
+        let entry = DebugLogEntry(
+            actionID: actionID,
+            title: title,
+            symbolName: symbolName,
+            kind: kind,
+            prompt: prompt,
+            output: trimmedOutput
+        )
+        debugLogEntries.append(entry)
+        debugLogEntries = Array(debugLogEntries.suffix(120))
+    }
+
+    private func prompt(for intent: ExecutionIntent, title: String) -> String {
+        switch intent {
+        case .run:
+            return "run \(title)"
+        case .restore:
+            return "restore \(title)"
+        }
+    }
+
+    private func originalActionID(for intent: ExecutionIntent) -> String? {
+        switch intent {
+        case .run(let action):
+            return action.id
+        case .restore(_, let actionIDs):
+            return actionIDs.count == 1 ? actionIDs.first : nil
         }
     }
 }

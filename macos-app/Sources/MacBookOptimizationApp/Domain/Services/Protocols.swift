@@ -26,9 +26,22 @@ protocol OptimizationExecuting {
 protocol StateStoreProtocol {
     func loadStates() throws -> [String: FeatureState]
     func updateState(featureID: String, status: ActionStatus, timestamp: Date) throws
+    func removeState(featureID: String) throws
     func resetStates() throws
 }
 
 protocol SystemInfoProviding {
     func machineSummary() async -> MachineSummary
+}
+
+struct RestoreBaseline: Codable, Equatable {
+    let capturedAt: Date
+    let values: [String: String]
+}
+
+protocol RestoreBaselineStoreProtocol {
+    func loadBaseline(for actionID: String) throws -> RestoreBaseline?
+    func saveBaseline(_ baseline: RestoreBaseline, for actionID: String) throws
+    func removeBaseline(for actionID: String) throws
+    func removeBaselines(for actionIDs: [String]) throws
 }

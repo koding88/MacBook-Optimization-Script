@@ -42,7 +42,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testCompletedInspectionEnqueuesToastWithStructuredSummaryLines() async {
+    func testCompletedInspectionPresentsResultWithoutDuplicateToast() async {
         let toastID = UUID()
         let result = ActionExecutionResult(
             status: .enabled,
@@ -69,9 +69,9 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         model.confirmSystemActionReview()
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertEqual(model.toasts.first?.summaryLines.count, 3)
-        model.dismissToast(id: toastID)
         XCTAssertTrue(model.toasts.isEmpty)
+        XCTAssertEqual(model.presentedActionResult?.title, "Battery Snapshot")
+        XCTAssertEqual(model.presentedActionResult?.message, "This action finished successfully.")
     }
 
     @MainActor
@@ -318,7 +318,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         let updatedAction = try! XCTUnwrap(model.actions.first(where: { $0.id == action.id }))
         XCTAssertEqual(updatedAction.status, .ready)
         XCTAssertEqual(model.activityFeed.first?.title, "Administrator Prompt Cancelled")
-        XCTAssertEqual(model.toasts.first?.type, .warning)
+        XCTAssertEqual(model.toasts.first?.type, .info)
         XCTAssertEqual(model.presentedActionResult?.kind, .warning)
     }
 
@@ -348,11 +348,11 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         XCTAssertNil(model.pendingConfirmationAction)
         XCTAssertEqual(model.presentedActionResult?.kind, .warning)
         XCTAssertEqual(model.presentedActionResult?.message, "This action is only available on Intel-based Macs.")
-        XCTAssertEqual(model.toasts.first?.title, "Action Unavailable")
+        XCTAssertTrue(model.toasts.isEmpty)
     }
 
     @MainActor
-    func testCompletedActionEnqueuesToastAndFilteredActivityExcludesOlderItems() async {
+    func testCompletedActionPresentsResultAndFilteredActivityExcludesOlderItems() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
         defaults.set(false, forKey: "app.confirmPrivilegedActions")
@@ -412,8 +412,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         model.confirmSystemActionReview()
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertEqual(model.toasts.first?.title, "Cleanup Ready")
-        XCTAssertEqual(model.toasts.first?.message, "Cache cleanup finished.")
+        XCTAssertTrue(model.toasts.isEmpty)
         XCTAssertEqual(model.activityFeed.first?.title, "Action Completed")
         XCTAssertEqual(model.presentedActionResult?.title, "Disable Dashboard")
 
@@ -440,7 +439,91 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
 
         XCTAssertTrue(try stateStore.loadStates().isEmpty)
         XCTAssertEqual(model.presentedActionResult?.title, "All Statuses")
-        XCTAssertEqual(model.toasts.first?.title, "Reset States")
+        XCTAssertTrue(model.toasts.isEmpty)
+    }
+
+    @MainActor
+    func testCapturedRestoreRequiresBaselineUntilActionHasRun() throws {
+        let baselineStore = InMemoryRestoreBaselineStore()
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: InMemoryStateStore(),
+            restoreBaselineStore: baselineStore,
+            settings: AppSettingsStore(defaults: UserDefaults(suiteName: #function)!),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        let action = try XCTUnwrap(model.actions.first(where: { $0.id == "system_performance" }))
+        XCTAssertEqual(
+            model.restoreMessage(for: action),
+            "Restore becomes available after this action captures the original machine settings once."
+        )
+
+        try baselineStore.saveBaseline(
+            RestoreBaseline(capturedAt: .now, values: ["kern.maxproc": "1064"]),
+            for: action.id
+        )
+
+        XCTAssertNil(model.restoreMessage(for: action))
+    }
+
+    @MainActor
+    func testResetAllToDefaultsBuildsRestoreReviewFromEligibleActionsOnly() throws {
+        let baselineStore = InMemoryRestoreBaselineStore()
+        try baselineStore.saveBaseline(
+            RestoreBaseline(capturedAt: .now, values: ["kern.maxproc": "1064"]),
+            for: "system_performance"
+        )
+        try baselineStore.saveBaseline(
+            RestoreBaseline(capturedAt: .now, values: ["net.inet.tcp.blackhole": "0"]),
+            for: "network_optimization"
+        )
+
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: InMemoryStateStore(),
+            restoreBaselineStore: baselineStore,
+            settings: AppSettingsStore(defaults: UserDefaults(suiteName: #function)!),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        model.resetAllToDefaults()
+
+        let review = try XCTUnwrap(model.pendingSystemActionReview)
+        XCTAssertEqual(review.mode, .restore)
+        XCTAssertTrue(review.affectedActionIDs.contains("system_performance"))
+        XCTAssertTrue(review.affectedActionIDs.contains("network_optimization"))
+        XCTAssertFalse(review.affectedActionIDs.contains("cache_clear"))
+        XCTAssertFalse(review.affectedActionIDs.contains("smc_reset"))
+    }
+
+    @MainActor
+    func testActivityDeletionRemovesSingleEntryAndClearAllRemovesEverything() {
+        let model = makeModel(
+            result: ActionExecutionResult(
+                status: .enabled,
+                toast: ToastMessage(type: .success, title: "Done", message: "Action completed."),
+                activityEvent: ActivityEvent(
+                    type: .success,
+                    title: "Done",
+                    message: "Action completed.",
+                    symbolName: "checkmark.circle"
+                )
+            )
+        )
+
+        model.activityFeed = [
+            ActivityItem(title: "One", message: "First", date: .now, kind: .info, symbolName: "1.circle"),
+            ActivityItem(title: "Two", message: "Second", date: .now, kind: .info, symbolName: "2.circle")
+        ]
+
+        let firstID = model.activityFeed[0].id
+        model.deleteActivity(id: firstID)
+        XCTAssertEqual(model.activityFeed.count, 1)
+        XCTAssertEqual(model.activityFeed.first?.title, "Two")
+
+        model.clearAllActivity()
+        XCTAssertTrue(model.activityFeed.isEmpty)
     }
 }
 
@@ -530,7 +613,33 @@ private final class InMemoryStateStore: StateStoreProtocol {
         )
     }
 
+    func removeState(featureID: String) throws {
+        states[featureID] = nil
+    }
+
     func resetStates() throws {
         states.removeAll()
+    }
+}
+
+private final class InMemoryRestoreBaselineStore: RestoreBaselineStoreProtocol {
+    private var baselines: [String: RestoreBaseline] = [:]
+
+    func loadBaseline(for actionID: String) throws -> RestoreBaseline? {
+        baselines[actionID]
+    }
+
+    func saveBaseline(_ baseline: RestoreBaseline, for actionID: String) throws {
+        baselines[actionID] = baseline
+    }
+
+    func removeBaseline(for actionID: String) throws {
+        baselines[actionID] = nil
+    }
+
+    func removeBaselines(for actionIDs: [String]) throws {
+        for actionID in actionIDs {
+            baselines[actionID] = nil
+        }
     }
 }

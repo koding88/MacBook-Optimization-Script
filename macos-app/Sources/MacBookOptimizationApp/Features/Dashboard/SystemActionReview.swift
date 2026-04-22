@@ -1,7 +1,13 @@
 import Foundation
 
+enum SystemActionReviewMode: Equatable {
+    case run
+    case restore
+}
+
 struct SystemActionReviewStep: Identifiable, Equatable {
     let id: String
+    let actionID: String
     let title: String
     let detail: String
     let command: String
@@ -10,7 +16,9 @@ struct SystemActionReviewStep: Identifiable, Equatable {
 }
 
 struct SystemActionReviewPlan: Identifiable, Equatable {
+    let mode: SystemActionReviewMode
     let action: OptimizationAction
+    let affectedActionIDs: [String]
     let steps: [SystemActionReviewStep]
     var selectedStepIDs: Set<SystemActionReviewStep.ID>
 
@@ -30,6 +38,15 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
         !selectedStepIDs.isEmpty
     }
 
+    var runButtonTitleKey: LocalizedKey {
+        switch mode {
+        case .run:
+            return .systemReviewRunSelected
+        case .restore:
+            return .restoreRunSelected
+        }
+    }
+
     static func build(for action: OptimizationAction, localizer: AppLocalizer) -> SystemActionReviewPlan? {
         guard [.system, .network, .storage, .performance, .maintenance, .monitoring].contains(action.category),
               let requests = action.kind.commandRequests,
@@ -38,9 +55,10 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
         }
 
         let steps = requests.enumerated().map { index, request in
-            let descriptor = descriptor(for: action.id, request: request, stepIndex: index, localizer: localizer)
+            let descriptor = descriptor(for: action.id, request: request, stepIndex: index, localizer: localizer, mode: .run)
             return SystemActionReviewStep(
                 id: "\(action.id)-\(index)",
+                actionID: action.id,
                 title: descriptor.title,
                 detail: descriptor.detail,
                 command: request.command,
@@ -50,9 +68,81 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
         }
 
         return SystemActionReviewPlan(
+            mode: .run,
             action: action,
+            affectedActionIDs: [action.id],
             steps: steps,
             selectedStepIDs: Set(steps.map(\.id))
+        )
+    }
+
+    static func buildRestore(
+        for action: OptimizationAction,
+        requests: [CommandRequest],
+        localizer: AppLocalizer
+    ) -> SystemActionReviewPlan? {
+        buildRestorePlan(
+            action: syntheticRestoreAction(
+                id: "restore-\(action.id)",
+                title: localizer.format(.restoreActionTitle, localizer.string(action.titleKey)),
+                symbolName: action.symbolName,
+                category: action.category,
+                requests: requests
+            ),
+            affectedActionIDs: [action.id],
+            requests: requests,
+            localizer: localizer
+        )
+    }
+
+    static func buildRestoreCategory(
+        category: ActionCategory,
+        actionRequests: [(OptimizationAction, [CommandRequest])],
+        localizer: AppLocalizer
+    ) -> SystemActionReviewPlan? {
+        let requests = actionRequests.flatMap { action, requests in
+            requests.map { (action, $0) }
+        }
+        guard !requests.isEmpty else { return nil }
+
+        let action = syntheticRestoreAction(
+            id: "restore-category-\(category.rawValue)",
+            title: localizer.format(.restoreCategoryTitle, category.rawValue),
+            symbolName: category.symbolName,
+            category: category,
+            requests: requests.map(\.1)
+        )
+
+        return buildRestorePlan(
+            action: action,
+            affectedActionIDs: actionRequests.map(\.0.id),
+            actionRequests: requests,
+            localizer: localizer
+        )
+    }
+
+    static func buildRestoreAll(
+        actionRequests: [(OptimizationAction, [CommandRequest])],
+        localizer: AppLocalizer
+    ) -> SystemActionReviewPlan? {
+        let requests = actionRequests.flatMap { action, requests in
+            requests.map { (action, $0) }
+        }
+        guard !requests.isEmpty else { return nil }
+
+        let action = syntheticRestoreAction(
+            id: "restore-all-defaults",
+            title: localizer.text(.resetDefaultsAllTitle),
+            symbolName: "arrow.uturn.backward.circle",
+            category: .system,
+            requests: requests.map(\.1)
+        )
+
+        return buildRestorePlan(
+            action: action,
+            affectedActionIDs: actionRequests.map(\.0.id),
+            actionRequests: requests,
+            localizer: localizer
         )
     }
 
@@ -60,8 +150,13 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
         for actionID: String,
         request: CommandRequest,
         stepIndex: Int,
-        localizer: AppLocalizer
+        localizer: AppLocalizer,
+        mode: SystemActionReviewMode
     ) -> (title: String, detail: String) {
+        if mode == .restore {
+            return restoreDescriptor(for: request.command, stepIndex: stepIndex, localizer: localizer)
+        }
+
         switch actionID {
         case "system_performance":
             return systemPerformanceDescriptor(for: request.command, localizer: localizer)
@@ -123,6 +218,137 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
             return (
                 title: localizer.format(.systemReviewStepFallbackTitle, stepIndex + 1),
                 detail: localizer.text(.systemReviewStepFallbackDetail)
+            )
+        }
+    }
+
+    private static func buildRestorePlan(
+        action: OptimizationAction,
+        affectedActionIDs: [String],
+        requests: [CommandRequest],
+        localizer: AppLocalizer
+    ) -> SystemActionReviewPlan? {
+        buildRestorePlan(
+            action: action,
+            affectedActionIDs: affectedActionIDs,
+            actionRequests: requests.map { (action, $0) },
+            localizer: localizer
+        )
+    }
+
+    private static func buildRestorePlan(
+        action: OptimizationAction,
+        affectedActionIDs: [String],
+        actionRequests: [(OptimizationAction, CommandRequest)],
+        localizer: AppLocalizer
+    ) -> SystemActionReviewPlan? {
+        guard !actionRequests.isEmpty else { return nil }
+
+        let steps = actionRequests.enumerated().map { index, payload in
+            let sourceAction = payload.0
+            let request = payload.1
+            let descriptor = descriptor(
+                for: sourceAction.id,
+                request: request,
+                stepIndex: index,
+                localizer: localizer,
+                mode: .restore
+            )
+
+            return SystemActionReviewStep(
+                id: "restore-\(sourceAction.id)-\(index)",
+                actionID: sourceAction.id,
+                title: descriptor.title,
+                detail: descriptor.detail,
+                command: request.command,
+                requiresAdministrator: request.requiresAdministrator,
+                request: request
+            )
+        }
+
+        return SystemActionReviewPlan(
+            mode: .restore,
+            action: action,
+            affectedActionIDs: affectedActionIDs,
+            steps: steps,
+            selectedStepIDs: Set(steps.map(\.id))
+        )
+    }
+
+    private static func syntheticRestoreAction(
+        id: String,
+        title: String,
+        symbolName: String,
+        category: ActionCategory,
+        requests: [CommandRequest]
+    ) -> OptimizationAction {
+        OptimizationAction(
+            id: id,
+            titleKey: title,
+            descriptionKey: title,
+            category: category,
+            symbolName: symbolName,
+            statusFeatureID: nil,
+            isRisky: false,
+            estimatedTime: "Default",
+            requiresRestart: false,
+            restoreBehavior: .notRestorableInspection(reasonKey: "restore.reason.inspection"),
+            kind: .command(requests),
+            status: .ready
+        )
+    }
+
+    private static func restoreDescriptor(for command: String, stepIndex: Int, localizer: AppLocalizer) -> (String, String) {
+        switch command {
+        case let command where command.hasPrefix("sysctl -w "):
+            let key = command
+                .replacingOccurrences(of: "sysctl -w ", with: "")
+                .split(separator: "=")
+                .first
+                .map(String.init) ?? "setting"
+            return (
+                title: localizer.format(.restoreSettingTitle, key),
+                detail: localizer.text(.restoreSettingDetail)
+            )
+        case "pmset restoredefaults":
+            return (
+                title: localizer.text(.restorePowerDefaultsTitle),
+                detail: localizer.text(.restorePowerDefaultsDetail)
+            )
+        case let command where command.hasPrefix("defaults delete "):
+            return (
+                title: localizer.text(.restorePreferenceOverrideTitle),
+                detail: localizer.text(.restorePreferenceOverrideDetail)
+            )
+        case "/usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off":
+            return (
+                title: localizer.text(.restoreFirewallTitle),
+                detail: localizer.text(.restoreFirewallDetail)
+            )
+        case "mdutil -a -i on":
+            return (
+                title: localizer.text(.restoreSpotlightTitle),
+                detail: localizer.text(.restoreSpotlightDetail)
+            )
+        case "trimforce disable":
+            return (
+                title: localizer.text(.restoreTrimTitle),
+                detail: localizer.text(.restoreTrimDetail)
+            )
+        case "nvram AutoBoot=%03":
+            return (
+                title: localizer.text(.restoreAutoBootTitle),
+                detail: localizer.text(.restoreAutoBootDetail)
+            )
+        case "killall Dock":
+            return (
+                title: localizer.text(.restoreReloadDockTitle),
+                detail: localizer.text(.restoreReloadDockDetail)
+            )
+        default:
+            return (
+                title: localizer.format(.restoreStepFallbackTitle, stepIndex + 1),
+                detail: localizer.text(.restoreStepFallbackDetail)
             )
         }
     }
@@ -379,10 +605,10 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
 
     private static func mdmStatusDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
         switch command {
-        case "printf 'Checking /etc/hosts for MDM entries...\\n' && grep -E 'deviceenrollment.apple.com|mdmenrollment.apple.com|iprofiles.apple.com' /etc/hosts || true":
-            return localized("system.review.monitoring.mdmStatus.inspectHosts", localizer: localizer)
-        case "profiles show -type enrollment":
+        case "printf 'MDM Enrollment Status:\\n' && (profiles status -type enrollment 2>/dev/null || profiles show -type enrollment 2>/dev/null || printf 'Unable to determine enrollment status.\\n')":
             return localized("system.review.monitoring.mdmStatus.readProfiles", localizer: localizer)
+        case "printf '\\nHosts advisory entries:\\n' && (grep -E 'deviceenrollment.apple.com|mdmenrollment.apple.com|iprofiles.apple.com' /etc/hosts || printf 'No MDM-related host overrides found.\\n')":
+            return localized("system.review.monitoring.mdmStatus.inspectHosts", localizer: localizer)
         default:
             return localized("system.review.monitoring.mdmStatus.fallback", localizer: localizer)
         }

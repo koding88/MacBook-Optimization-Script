@@ -75,6 +75,25 @@ final class StateStore: StateStoreProtocol {
         try fileHandle.write(contentsOf: data)
     }
 
+    func removeState(featureID: String) throws {
+        let states = try loadStates().filter { $0.key != featureID }
+        let url = configURL()
+        ensureConfigFileExists(at: url)
+
+        let content = states
+            .sorted { $0.key < $1.key }
+            .map { key, value in
+                "\(key)=\(value.status)|\(value.timestamp)"
+            }
+            .joined(separator: "\n")
+
+        do {
+            try (content.isEmpty ? "" : content + "\n").write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            throw StateStoreError.unwritableConfig(url)
+        }
+    }
+
     func resetStates() throws {
         let url = configURL()
         if fileManager.fileExists(atPath: url.path) {
