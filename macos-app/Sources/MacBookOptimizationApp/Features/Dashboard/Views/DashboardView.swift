@@ -15,6 +15,7 @@ struct DashboardView: View {
             } detail: {
                 detailContent
             }
+            .background(WindowCloseGuard(model: model, localizer: localizer))
 
             ToastCenterView(toasts: model.toasts) { toastID in
                 model.dismissToast(id: toastID)
@@ -92,6 +93,7 @@ struct DashboardView: View {
             NavigationStack {
                 SettingsView()
                     .environmentObject(settings)
+                    .environmentObject(model)
             }
         }
     }
@@ -152,12 +154,20 @@ struct DashboardView: View {
             ActivityFeedView(
                 localizer: localizer,
                 filter: $model.activityFilter,
-                items: model.filteredActivity
+                items: model.filteredActivity,
+                onDelete: { itemID in model.deleteActivity(id: itemID) },
+                onClearAll: model.clearAllActivity
             )
         case .logs:
-            LogsPanelView(localizer: localizer, output: model.debugOutput)
-        case .category, .cpu, .memory, .battery, .mdm:
-            categoryDetail
+            LogsPanelView(
+                localizer: localizer,
+                output: model.logsTranscript,
+                entries: model.debugLogEntries
+            )
+        case .category(let category):
+            categoryDetail(category)
+        case .cpu, .memory, .battery, .mdm:
+            quickPanelDetail
         }
     }
 
@@ -172,10 +182,13 @@ struct DashboardView: View {
                         isRunning: model.isRunningActionID == action.id,
                         isAvailable: model.isActionAvailable(action),
                         availabilityMessage: model.unavailableMessage(for: action),
+                        restoreMessage: model.restoreMessage(for: action),
                         localizer: localizer,
                         density: settings.rowDensity
                     ) {
                         Task { await model.run(actionID: action.id) }
+                    } restoreAction: {
+                        model.restore(actionID: action.id)
                     }
                 }
             }
@@ -183,25 +196,58 @@ struct DashboardView: View {
         .listStyle(.inset)
     }
 
-    private var categoryDetail: some View {
+    private func categoryDetail(_ category: ActionCategory) -> some View {
         List {
-            SystemInfoView(summary: model.machineSummary, localizer: localizer)
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(category.rawValue)
+                            .font(.title3.weight(.semibold))
 
-            Section(localizer.text(.actionsTitle)) {
+                        Text(localizer.text(.actionsTitle))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button(localizer.text(.restoreCategoryButton)) {
+                        model.restoreSelectedCategory()
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.vertical, 6)
+            }
+
+            Section {
                 ForEach(model.visibleActions) { action in
                     ActionRowView(
                         action: action,
                         isRunning: model.isRunningActionID == action.id,
                         isAvailable: model.isActionAvailable(action),
                         availabilityMessage: model.unavailableMessage(for: action),
+                        restoreMessage: model.restoreMessage(for: action),
                         localizer: localizer,
                         density: settings.rowDensity
                     ) {
                         Task { await model.run(actionID: action.id) }
+                    } restoreAction: {
+                        model.restore(actionID: action.id)
                     }
                 }
             }
         }
         .listStyle(.inset)
+    }
+
+    @ViewBuilder
+    private var quickPanelDetail: some View {
+        if let action = model.selectedQuickPanelAction {
+            QuickPanelDetailView(action: action, localizer: localizer)
+                .environmentObject(model)
+        } else {
+            Text(localizer.text(.noOutputYet))
+                .foregroundStyle(.secondary)
+        }
     }
 }

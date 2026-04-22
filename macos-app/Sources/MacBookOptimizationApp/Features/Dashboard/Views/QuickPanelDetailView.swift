@@ -1,0 +1,77 @@
+import SwiftUI
+
+struct QuickPanelDetailView: View {
+    @EnvironmentObject private var model: OptimizationDashboardViewModel
+
+    let action: OptimizationAction
+    let localizer: AppLocalizer
+
+    private var panelState: QuickPanelState? {
+        model.quickPanelState(for: action.id)
+    }
+
+    private var latestLogEntry: DebugLogEntry? {
+        model.latestLogEntry(for: action.id)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(localizer.string(action.titleKey))
+                            .font(.title2.weight(.semibold))
+
+                        Text(localizer.string(action.descriptionKey))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button(localizer.text(.run)) {
+                        Task { await model.run(actionID: action.id) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isRunningActionID == action.id)
+                }
+
+                if let summary = panelState?.summary {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(summary.primaryValue)
+                            .font(.title3.weight(.semibold))
+
+                        ForEach(Array(summary.secondaryValues.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(localizer.text(item.labelKey))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+
+                                Spacer(minLength: 8)
+
+                                Text(item.value)
+                                    .font(.subheadline.weight(.medium))
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+
+                TerminalSurfaceView(
+                    title: localizer.string(action.titleKey),
+                    output: latestLogEntry?.transcript ?? panelState?.details ?? "",
+                    emptyMessage: localizer.text(.noOutputYet),
+                    animateKey: latestLogEntry?.id.uuidString ?? action.id,
+                    minHeight: 260,
+                    maxHeight: nil
+                )
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .navigationTitle(localizer.string(action.titleKey))
+    }
+}

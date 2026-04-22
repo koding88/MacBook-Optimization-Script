@@ -7,6 +7,13 @@ final class SystemInfoProvider: SystemInfoProviding {
     private let snapshotProvider = SystemSnapshotProvider()
     private let formatter = SystemInfoFormatter(localizer: AppLocalizer(language: .english))
 
+    struct HardwareSnapshot: Equatable {
+        let marketingModel: String
+        let modelIdentifier: String
+        let chipName: String?
+        let serialNumber: String?
+    }
+
     private struct DisplaySnapshot {
         let gpuDescription: String?
         let displayName: String
@@ -17,13 +24,17 @@ final class SystemInfoProvider: SystemInfoProviding {
         let processInfo = ProcessInfo.processInfo
         let systemVersion = processInfo.operatingSystemVersionString
         let storageSnapshot = await snapshotProvider.storageSnapshot()
+        let hardwareSnapshot = primaryHardwareSnapshot()
         let displaySnapshot = primaryDisplaySnapshot()
         let cpuCount = ProcessInfo.processInfo.processorCount
+        let modelIdentifier = hardwareSnapshot?.modelIdentifier ?? sysctlString("hw.model") ?? "Mac"
+        let marketingModel = hardwareSnapshot?.marketingModel ?? modelIdentifier
+        let chipName = hardwareSnapshot?.chipName ?? sysctlString("machdep.cpu.brand_string") ?? appleSiliconChipName()
 
         return MachineSummary(
-            modelName: sysctlString("hw.model") ?? "Mac",
-            marketingModel: sysctlString("hw.model") ?? "Mac",
-            chip: sysctlString("machdep.cpu.brand_string") ?? appleSiliconChipName(),
+            modelName: modelIdentifier,
+            marketingModel: marketingModel,
+            chip: chipName,
             coreDescription: "\(cpuCount)-core CPU",
             gpuDescription: displaySnapshot.gpuDescription,
             memoryBytes: processInfo.physicalMemory,
@@ -34,7 +45,7 @@ final class SystemInfoProvider: SystemInfoProviding {
             storageSnapshot: storageSnapshot,
             systemVersion: systemVersion,
             battery: batterySummary(),
-            serialNumber: nil
+            serialNumber: hardwareSnapshot?.serialNumber
         )
     }
 
@@ -75,10 +86,41 @@ final class SystemInfoProvider: SystemInfoProviding {
         return DisplaySnapshot(gpuDescription: nil, displayName: description, displayResolution: resolution)
     }
 
+    private func primaryHardwareSnapshot() -> HardwareSnapshot? {
+        guard
+            let hardwareEntries = systemProfilerEntries(for: "SPHardwareDataType"),
+            let hardwareEntry = hardwareEntries.first
+        else {
+            return nil
+        }
+
+        return Self.hardwareSnapshot(from: hardwareEntry)
+    }
+
     private func primaryDisplaySnapshotFromSystemProfiler() -> DisplaySnapshot? {
+        guard
+            let displays = systemProfilerEntries(for: "SPDisplaysDataType"),
+            let gpuEntry = displays.first
+        else {
+            return nil
+        }
+
+        let gpuDescription = (gpuEntry["sppci_cores"] as? String).map { "\($0)-core GPU" }
+        let displayEntry = (gpuEntry["spdisplays_ndrvs"] as? [[String: Any]])?.first
+        let displayName = normalizedDisplayName(from: displayEntry) ?? "Built-in Display"
+        let resolution = normalizedDisplayResolution(from: displayEntry) ?? "Unavailable"
+
+        return DisplaySnapshot(
+            gpuDescription: gpuDescription,
+            displayName: displayName,
+            displayResolution: resolution
+        )
+    }
+
+    private func systemProfilerEntries(for dataType: String) -> [[String: Any]]? {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
-        task.arguments = ["SPDisplaysDataType", "-json"]
+        task.arguments = [dataType, "-json"]
 
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -96,21 +138,35 @@ final class SystemInfoProvider: SystemInfoProviding {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let displays = json["SPDisplaysDataType"] as? [[String: Any]],
-            let gpuEntry = displays.first
+            let entries = json[dataType] as? [[String: Any]]
         else {
             return nil
         }
 
-        let gpuDescription = (gpuEntry["sppci_cores"] as? String).map { "\($0)-core GPU" }
-        let displayEntry = (gpuEntry["spdisplays_ndrvs"] as? [[String: Any]])?.first
-        let displayName = normalizedDisplayName(from: displayEntry) ?? "Built-in Display"
-        let resolution = normalizedDisplayResolution(from: displayEntry) ?? "Unavailable"
+        return entries
+    }
 
-        return DisplaySnapshot(
-            gpuDescription: gpuDescription,
-            displayName: displayName,
-            displayResolution: resolution
+    static func hardwareSnapshot(from entry: [String: Any]) -> HardwareSnapshot? {
+        let marketingModel = (entry["machine_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelIdentifier = (entry["machine_model"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard
+            let marketingModel,
+            !marketingModel.isEmpty,
+            let modelIdentifier,
+            !modelIdentifier.isEmpty
+        else {
+            return nil
+        }
+
+        let chipName = (entry["chip_type"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serialNumber = (entry["serial_number"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return HardwareSnapshot(
+            marketingModel: marketingModel,
+            modelIdentifier: modelIdentifier,
+            chipName: chipName?.isEmpty == true ? nil : chipName,
+            serialNumber: serialNumber?.isEmpty == true ? nil : serialNumber
         )
     }
 

@@ -68,61 +68,57 @@ struct SystemInfoView: View {
     }
 
     var body: some View {
-        Section {
-            if let summary {
-                VStack(alignment: .leading, spacing: 18) {
-                    header(summary: summary)
+        if let summary {
+            VStack(alignment: .leading, spacing: 18) {
+                header(summary: summary)
 
-                    LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 16) {
-                        specCard(
-                            title: localizer.text(.systemLabelChip),
-                            symbolName: "cpu.fill",
-                            symbolPrimaryColor: .blue,
-                            symbolSecondaryColor: .cyan,
-                            primaryValue: summary.chipName,
-                            secondaryValue: [summary.coreDescription, summary.gpuDescription]
-                                .compactMap { $0 }
-                                .joined(separator: " • ")
-                        )
+                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 16) {
+                    specCard(
+                        title: localizer.text(.systemLabelChip),
+                        symbolName: "cpu.fill",
+                        symbolPrimaryColor: .blue,
+                        symbolSecondaryColor: .cyan,
+                        primaryValue: summary.chipName,
+                        secondaryValue: [summary.coreDescription, summary.gpuDescription]
+                            .compactMap { $0 }
+                            .joined(separator: " • ")
+                    )
 
-                        specCard(
-                            title: localizer.text(.systemLabelMemory),
-                            symbolName: "memorychip.fill",
-                            symbolPrimaryColor: .purple,
-                            symbolSecondaryColor: .pink,
-                            primaryValue: formatter.memorySummary(memoryBytes: summary.memoryBytes)
-                        )
+                    specCard(
+                        title: localizer.text(.systemLabelMemory),
+                        symbolName: "memorychip.fill",
+                        symbolPrimaryColor: .purple,
+                        symbolSecondaryColor: .pink,
+                        primaryValue: formatter.memorySummary(memoryBytes: summary.memoryBytes)
+                    )
 
-                        storageCard(summary: summary)
+                    storageCard(summary: summary)
 
-                        batteryCard(summary: summary)
+                    batteryCard(summary: summary)
 
-                        specCard(
-                            title: localizer.text(.systemLabelDisplay),
-                            symbolName: "display",
-                            symbolPrimaryColor: .indigo,
-                            symbolSecondaryColor: .blue,
-                            primaryValue: summary.displayName,
-                            secondaryValue: summary.displayResolution
-                        )
+                    specCard(
+                        title: localizer.text(.systemLabelDisplay),
+                        symbolName: "display",
+                        symbolPrimaryColor: .indigo,
+                        symbolSecondaryColor: .blue,
+                        primaryValue: summary.displayName,
+                        secondaryValue: summary.displayResolution
+                    )
 
-                        specCard(
-                            title: localizer.text(.systemLabelMacOS),
-                            symbolName: "gearshape.2.fill",
-                            symbolPrimaryColor: .orange,
-                            symbolSecondaryColor: .yellow,
-                            primaryValue: summary.systemVersion,
-                            secondaryValue: nil
-                        )
-                    }
+                    specCard(
+                        title: localizer.text(.systemLabelMacOS),
+                        symbolName: "gearshape.2.fill",
+                        symbolPrimaryColor: .orange,
+                        symbolSecondaryColor: .yellow,
+                        primaryValue: summary.systemVersion,
+                        secondaryValue: nil
+                    )
                 }
-                .padding(.vertical, 6)
-            } else {
-                ProgressView()
-                    .controlSize(.small)
             }
-        } header: {
-            Text(localizer.text(.summaryTitle))
+            .padding(.vertical, 6)
+        } else {
+            ProgressView()
+                .controlSize(.small)
         }
     }
 
@@ -186,8 +182,8 @@ struct SystemInfoView: View {
             availableBytes: summary.storageAvailableBytes
         )
         let totalBytes = max(snapshot.totalBytes, 0)
-        let usedBytes = max(snapshot.availableBytes, 0)
-        let availableBytes = max(totalBytes - usedBytes, 0)
+        let availableBytes = max(snapshot.availableBytes, 0)
+        let usedBytes = max(totalBytes - availableBytes, 0)
         let progress = totalBytes > 0 ? Double(usedBytes) / Double(totalBytes) : 0
 
         return SystemSpecCard(
