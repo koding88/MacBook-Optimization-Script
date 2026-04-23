@@ -9,17 +9,20 @@ final class OptimizationEngine: OptimizationExecuting {
     private let commandExecutor: SystemCommandExecuting
     private let stateStore: StateStoreProtocol
     private let feedbackPresenter: any ActionFeedbackPresenting
+    private let localizer: AppLocalizer
 
     init(
         commandExecutor: SystemCommandExecuting,
         stateStore: StateStoreProtocol,
         feedbackPresenter: any ActionFeedbackPresenting = ActionFeedbackPresenter(
             localizer: AppLocalizer(language: .english)
-        )
+        ),
+        localizer: AppLocalizer = AppLocalizer(language: .english)
     ) {
         self.commandExecutor = commandExecutor
         self.stateStore = stateStore
         self.feedbackPresenter = feedbackPresenter
+        self.localizer = localizer
     }
 
     func execute(_ action: OptimizationAction) async throws -> ActionExecutionResult {
@@ -314,35 +317,89 @@ final class OptimizationEngine: OptimizationExecuting {
 
     private func mdmInspectionPresentation(output: String) -> InspectionPresentation? {
         let normalized = output.lowercased()
-        let enrollmentStatus: String
+        let profilesSection = sectionBodyToEnd(after: "Profiles enrollment readout (temporary hosts bypass disabled):", in: output)
+        let historySection = sectionBody(after: "Historical local traces:", in: output)
 
-        if normalized.contains("mdm enrollment: yes")
-            || normalized.contains("enrolled via dep: yes")
-            || normalized.contains("enrollment status: enrolled") {
-            enrollmentStatus = "Enrolled"
-        } else if normalized.contains("mdm enrollment: no")
-            || normalized.contains("enrolled via dep: no")
-            || normalized.contains("not enrolled")
-            || normalized.contains("no enrollment information")
-            || normalized.contains("unable to determine enrollment status") {
-            enrollmentStatus = "Not enrolled"
+        let profilesNormalized = profilesSection.lowercased()
+        let historyNormalized = historySection.lowercased()
+
+        let currentDEP = profilesNormalized.contains("enrolled via dep: yes")
+        let currentEnrollment = profilesNormalized.contains("mdm enrollment: yes")
+        let adeAssigned = currentDEP
+            || profilesNormalized.contains("device enrollment configuration:")
+            || profilesNormalized.contains("configurationurl =")
+            || profilesNormalized.contains("ismandatory = 1;")
+            || profilesNormalized.contains("ismdmunremovable = 1;")
+        let historicalTracesFound = historyNormalized.contains("dep trace files: present")
+            || historyNormalized.contains("historical mdm traces: present")
+        let resetRisk: String
+
+        let enrollmentStatus: String
+        if currentEnrollment {
+            enrollmentStatus = localizer.text(.mdmStatusCurrentlyEnrolled)
+        } else if profilesNormalized.contains("mdm enrollment: no") {
+            enrollmentStatus = localizer.text(.mdmStatusNotCurrentlyEnrolled)
+        } else if adeAssigned {
+            enrollmentStatus = localizer.text(.mdmStatusDepAdeAssigned)
+        } else if historicalTracesFound {
+            enrollmentStatus = localizer.text(.mdmStatusHistoricalTracesFound)
         } else {
-            enrollmentStatus = "Needs review"
+            enrollmentStatus = localizer.text(.mdmStatusNeedsReview)
         }
 
-        let advisory = normalized.contains("no mdm-related host overrides found")
-            ? "No host overrides detected"
-            : (normalized.contains("hosts advisory entries") ? "Hosts overrides detected" : "Hosts advisory unavailable")
+        if currentEnrollment || adeAssigned {
+            resetRisk = localizer.text(.mdmRiskLikelyYes)
+        } else if profilesNormalized.contains("enrolled via dep: no") && profilesNormalized.contains("mdm enrollment: no") {
+            resetRisk = localizer.text(.mdmRiskNoClearTrigger)
+        } else if historicalTracesFound {
+            resetRisk = localizer.text(.mdmRiskHistoricalTracesSuggestReview)
+        } else {
+            resetRisk = localizer.text(.mdmStatusNeedsReview)
+        }
+
+        let hasBypassHosts = normalized.contains("0.0.0.0 deviceenrollment.apple.com")
+            || normalized.contains("0.0.0.0 mdmenrollment.apple.com")
+            || normalized.contains("0.0.0.0 iprofiles.apple.com")
+
+        let advisory = hasBypassHosts
+            ? localizer.text(.mdmHostsWarningBypassDetected)
+            : (normalized.contains("no mdm-related host overrides found")
+                ? localizer.text(.mdmHostsNoBypassDetected)
+                : localizer.text(.mdmHostsAdvisoryUnavailable))
 
         return InspectionPresentation(
             summary: ActionResultSummary(
                 primaryValue: enrollmentStatus,
                 secondaryValues: [
+                    .init(labelKey: .snapshotMDMCurrentEnrollment, value: currentEnrollment ? localizer.text(.commonYes) : localizer.text(.commonNo)),
+                    .init(labelKey: .snapshotMDMADEAssignment, value: adeAssigned ? localizer.text(.commonYes) : localizer.text(.commonNo)),
+                    .init(labelKey: .snapshotMDMResetRisk, value: resetRisk),
                     .init(labelKey: .snapshotMDMHostsAdvisory, value: advisory)
                 ]
             ),
             symbolName: "building.2.crop.circle"
         )
+    }
+
+    private func sectionBody(after header: String, in output: String) -> String {
+        guard let headerRange = output.range(of: header) else {
+            return ""
+        }
+
+        let remainder = output[headerRange.upperBound...]
+        if let nextSectionRange = remainder.range(of: "\n\n") {
+            return String(remainder[..<nextSectionRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return String(remainder).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func sectionBodyToEnd(after header: String, in output: String) -> String {
+        guard let headerRange = output.range(of: header) else {
+            return ""
+        }
+
+        return String(output[headerRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func outputLines(from output: String) -> [String] {
@@ -407,13 +464,13 @@ final class OptimizationEngine: OptimizationExecuting {
         guard let batteryLine else { return nil }
         let normalized = batteryLine.lowercased()
         if normalized.contains("charging") {
-            return "Charging"
+            return localizer.text(.batteryStateCharging)
         }
         if normalized.contains("discharging") {
-            return "Discharging"
+            return localizer.text(.batteryStateDischarging)
         }
         if normalized.contains("charged") {
-            return "Charged"
+            return localizer.text(.batteryStateCharged)
         }
         return nil
     }
