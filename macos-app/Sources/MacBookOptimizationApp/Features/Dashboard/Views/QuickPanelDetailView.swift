@@ -14,6 +14,18 @@ struct QuickPanelDetailView: View {
         model.latestLogEntry(for: action.id)
     }
 
+    private var terminalOutput: String {
+        latestLogEntry?.transcript ?? panelState?.details ?? ""
+    }
+
+    private var viewIdentity: String {
+        [
+            action.id,
+            panelState?.summary?.primaryValue ?? "no-summary",
+            latestLogEntry?.id.uuidString ?? "no-log"
+        ].joined(separator: "|")
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -62,7 +74,7 @@ struct QuickPanelDetailView: View {
 
                 TerminalSurfaceView(
                     title: localizer.string(action.titleKey),
-                    output: latestLogEntry?.transcript ?? panelState?.details ?? "",
+                    output: terminalOutput,
                     emptyMessage: localizer.text(.noOutputYet),
                     animateKey: latestLogEntry?.id.uuidString ?? action.id,
                     minHeight: 260,
@@ -72,6 +84,7 @@ struct QuickPanelDetailView: View {
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .id(viewIdentity)
         .navigationTitle(localizer.string(action.titleKey))
     }
 }

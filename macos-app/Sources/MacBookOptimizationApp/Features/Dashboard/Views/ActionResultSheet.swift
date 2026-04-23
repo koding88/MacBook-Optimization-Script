@@ -13,33 +13,36 @@ struct ActionResultSheet: View {
     }
 
     private var sheetWidth: CGFloat {
-        if result.summary == nil && detailLineCount <= 3 {
-            return 500
+        switch result.layout {
+        case .compact:
+            return 460
+        case .medium:
+            return 620
+        case .large:
+            return 700
         }
-        if detailLineCount >= 10 || result.summary != nil {
-            return 660
-        }
-        return 560
     }
 
     private var sheetHeight: CGFloat {
-        if result.summary == nil && detailLineCount <= 3 {
-            return 240
+        switch result.layout {
+        case .compact:
+            return 210
+        case .medium:
+            return 340
+        case .large:
+            return 470
         }
-        if detailLineCount >= 10 {
-            return 460
-        }
-        return 340
     }
 
     private var terminalHeight: CGFloat {
-        if detailLineCount >= 12 {
-            return 280
+        switch result.layout {
+        case .compact:
+            return 140
+        case .medium:
+            return max(180, min(240, CGFloat(max(detailLineCount, 4)) * 18))
+        case .large:
+            return max(240, min(320, CGFloat(max(detailLineCount, 8)) * 18))
         }
-        if detailLineCount >= 6 {
-            return 220
-        }
-        return 160
     }
 
     var body: some View {
@@ -90,6 +93,7 @@ struct ActionResultSheet: View {
                             .padding(.top, 12)
                     }
                     .controlSize(.large)
+                    .animation(.easeInOut(duration: 0.18), value: isShowingDetails)
                 }
             }
 
@@ -106,6 +110,9 @@ struct ActionResultSheet: View {
         .padding(24)
         .frame(width: sheetWidth)
         .frame(minHeight: sheetHeight)
+        .onAppear {
+            isShowingDetails = result.layout == .large
+        }
     }
 
     private var header: some View {

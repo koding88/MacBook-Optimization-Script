@@ -245,6 +245,7 @@ struct DashboardView: View {
         if let action = model.selectedQuickPanelAction {
             QuickPanelDetailView(action: action, localizer: localizer)
                 .environmentObject(model)
+                .id("quick-panel-\(action.id)")
         } else {
             Text(localizer.text(.noOutputYet))
                 .foregroundStyle(.secondary)

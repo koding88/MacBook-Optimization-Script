@@ -82,6 +82,103 @@ final class OptimizationEngineTests: XCTestCase {
         XCTAssertTrue(result.debugLog?.contains("CPU Model: Apple M2 Pro") == true)
         XCTAssertEqual(result.toast.summaryLines.first, "Apple M2 Pro")
     }
+
+    func testMDMInspectionUsesProfilesReadoutAsCurrentVerdictAndCalculatesResetRisk() async throws {
+        let executor = MockSystemCommandExecutor(
+            output: """
+            Historical local traces:
+            DEP trace files: Present
+            Historical MDM traces: Present
+
+            Hosts advisory entries:
+            0.0.0.0 deviceenrollment.apple.com
+            0.0.0.0 mdmenrollment.apple.com
+            0.0.0.0 iprofiles.apple.com
+
+            Profiles enrollment readout (temporary hosts bypass disabled):
+            profiles status -type enrollment:
+            Enrolled via DEP: Yes
+            MDM enrollment: Yes
+
+            profiles show -type enrollment:
+            Enrolled via DEP: Yes
+            MDM enrollment: Yes
+
+            profiles list:
+            _computerlevel[1] attribute: profile.example
+
+            profiles show -type configuration:
+            profileIdentifier: com.example.mdm
+            """,
+            exitCode: 0
+        )
+        let engine = OptimizationEngine(
+            commandExecutor: executor,
+            stateStore: InMemoryStateStore(),
+            feedbackPresenter: ActionFeedbackPresenter(localizer: AppLocalizer(language: .english))
+        )
+
+        let action = OptimizationCatalog.actions().first(where: { $0.id == "mdm_status" })!
+        let result = try await engine.execute(action)
+
+        XCTAssertEqual(result.summary?.primaryValue, "Currently enrolled")
+        XCTAssertEqual(result.summary?.secondaryValues[0].value, "Yes")
+        XCTAssertEqual(result.summary?.secondaryValues[1].value, "Yes")
+        XCTAssertEqual(result.summary?.secondaryValues[2].value, "Likely yes")
+        XCTAssertEqual(result.summary?.secondaryValues[3].value, "Warning: Possible MDM bypass hosts detected")
+        XCTAssertEqual(result.summary?.secondaryValues.count, 4)
+    }
+
+    func testMDMInspectionRecognizesADEAssignmentEvenWhenCurrentEnrollmentIsNo() async throws {
+        let executor = MockSystemCommandExecutor(
+            output: """
+            Historical local traces:
+            DEP trace files: Present
+            Historical MDM traces: Present
+
+            Hosts advisory entries:
+            0.0.0.0 deviceenrollment.apple.com
+            0.0.0.0 mdmenrollment.apple.com
+            0.0.0.0 iprofiles.apple.com
+
+            Profiles enrollment readout (temporary hosts bypass disabled):
+            profiles status -type enrollment:
+            Enrolled via DEP: No
+            MDM enrollment: No
+
+            profiles show -type enrollment:
+            Device Enrollment configuration:
+            {
+                ConfigurationURL = "https://illumio.jamfcloud.com/cloudenroll";
+                IsMDMUnremovable = 1;
+                IsMandatory = 1;
+                MDMServerUID = deadbeef;
+                OrganizationName = Illumio;
+            }
+
+            profiles list:
+            There are no configuration profiles installed in the system domain
+
+            profiles show -type configuration:
+            There are no configuration profiles installed in the system domain
+            """,
+            exitCode: 0
+        )
+        let engine = OptimizationEngine(
+            commandExecutor: executor,
+            stateStore: InMemoryStateStore(),
+            feedbackPresenter: ActionFeedbackPresenter(localizer: AppLocalizer(language: .english))
+        )
+
+        let action = OptimizationCatalog.actions().first(where: { $0.id == "mdm_status" })!
+        let result = try await engine.execute(action)
+
+        XCTAssertEqual(result.summary?.primaryValue, "Not currently enrolled")
+        XCTAssertEqual(result.summary?.secondaryValues[0].value, "No")
+        XCTAssertEqual(result.summary?.secondaryValues[1].value, "Yes")
+        XCTAssertEqual(result.summary?.secondaryValues[2].value, "Likely yes")
+        XCTAssertEqual(result.summary?.secondaryValues[3].value, "Warning: Possible MDM bypass hosts detected")
+    }
 }
 
 private struct MockSystemCommandExecutor: SystemCommandExecuting {

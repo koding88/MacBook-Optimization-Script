@@ -180,6 +180,17 @@ enum ToastType: String, Equatable {
     case success
     case warning
     case error
+
+    var defaultDismissAfter: TimeInterval {
+        switch self {
+        case .info, .success:
+            return 3
+        case .warning:
+            return 5
+        case .error:
+            return 7
+        }
+    }
 }
 
 struct ToastMessage: Identifiable, Equatable {
@@ -207,6 +218,26 @@ struct ToastMessage: Identifiable, Equatable {
         self.summaryLines = summaryLines
         self.timestamp = timestamp
         self.dismissAfter = dismissAfter
+    }
+
+    static func timed(
+        id: UUID = UUID(),
+        type: ToastType,
+        title: String,
+        message: String,
+        summaryLines: [String] = [],
+        timestamp: Date = .now,
+        dismissAfter: TimeInterval? = nil
+    ) -> ToastMessage {
+        ToastMessage(
+            id: id,
+            type: type,
+            title: title,
+            message: message,
+            summaryLines: summaryLines,
+            timestamp: timestamp,
+            dismissAfter: dismissAfter ?? type.defaultDismissAfter
+        )
     }
 }
 
@@ -269,6 +300,12 @@ enum PresentedActionResultKind: Equatable {
     case error
 }
 
+enum PresentedActionResultLayout: Equatable {
+    case compact
+    case medium
+    case large
+}
+
 struct PresentedActionResult: Identifiable, Equatable {
     let id: UUID
     let kind: PresentedActionResultKind
@@ -277,6 +314,7 @@ struct PresentedActionResult: Identifiable, Equatable {
     let symbolName: String
     let summary: ActionResultSummary?
     let details: String?
+    let layout: PresentedActionResultLayout
 
     init(
         id: UUID = UUID(),
@@ -285,7 +323,8 @@ struct PresentedActionResult: Identifiable, Equatable {
         message: String,
         symbolName: String,
         summary: ActionResultSummary? = nil,
-        details: String? = nil
+        details: String? = nil,
+        layout: PresentedActionResultLayout = .medium
     ) {
         self.id = id
         self.kind = kind
@@ -294,6 +333,7 @@ struct PresentedActionResult: Identifiable, Equatable {
         self.symbolName = symbolName
         self.summary = summary
         self.details = details
+        self.layout = layout
     }
 }
 

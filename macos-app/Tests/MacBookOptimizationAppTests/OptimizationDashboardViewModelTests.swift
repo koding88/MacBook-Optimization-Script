@@ -107,6 +107,38 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testQuickPanelStateAndLogsStayBoundToOriginalInspectionAction() async {
+        let result = ActionExecutionResult(
+            status: .enabled,
+            toast: ToastMessage(type: .info, title: "Check MDM Status", message: "Inspection complete"),
+            activityEvent: ActivityEvent(
+                timestamp: .now,
+                type: .info,
+                title: "Check MDM Status",
+                message: "MDM inspection completed.",
+                symbolName: "building.2.crop.circle"
+            ),
+            summary: ActionResultSummary(
+                primaryValue: "Not enrolled",
+                secondaryValues: [
+                    .init(labelKey: .snapshotMDMHostsAdvisory, value: "No host overrides detected")
+                ]
+            ),
+            debugLog: "MDM Enrollment Status:\nMDM enrollment: No"
+        )
+
+        let model = makeModel(result: result)
+        await model.run(actionID: "mdm_status")
+        model.confirmSystemActionReview()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(model.quickPanelState(for: "mdm_status")?.summary?.primaryValue, "Not enrolled")
+        XCTAssertEqual(model.latestLogEntry(for: "mdm_status")?.output, "MDM Enrollment Status:\nMDM enrollment: No")
+        XCTAssertNil(model.quickPanelState(for: "system_check_battery"))
+        XCTAssertNil(model.latestLogEntry(for: "system_check_battery"))
+    }
+
+    @MainActor
     func testRiskyActionShowsStepReviewBeforeConfirmation() async {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
@@ -292,8 +324,9 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         model.confirmSystemActionReview()
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertTrue(model.toasts.contains { $0.title == "Waiting for Password" })
         XCTAssertTrue(model.activityFeed.contains { $0.title == "Administrator Approval Needed" })
+        XCTAssertTrue(model.toasts.isEmpty)
+        XCTAssertEqual(model.presentedActionResult?.kind, .success)
     }
 
     @MainActor
@@ -318,7 +351,7 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         let updatedAction = try! XCTUnwrap(model.actions.first(where: { $0.id == action.id }))
         XCTAssertEqual(updatedAction.status, .ready)
         XCTAssertEqual(model.activityFeed.first?.title, "Administrator Prompt Cancelled")
-        XCTAssertEqual(model.toasts.first?.type, .info)
+        XCTAssertTrue(model.toasts.isEmpty)
         XCTAssertEqual(model.presentedActionResult?.kind, .warning)
     }
 
@@ -440,6 +473,56 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         XCTAssertTrue(try stateStore.loadStates().isEmpty)
         XCTAssertEqual(model.presentedActionResult?.title, "All Statuses")
         XCTAssertTrue(model.toasts.isEmpty)
+        XCTAssertEqual(model.presentedActionResult?.layout, .compact)
+    }
+
+    @MainActor
+    func testPresentingResultClearsTransientToasts() throws {
+        let stateStore = InMemoryStateStore()
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: stateStore,
+            settings: AppSettingsStore(defaults: UserDefaults(suiteName: #function)!),
+            systemInfoProvider: MockSystemInfoProvider()
+        )
+
+        model.toasts = [
+            .timed(type: .info, title: "Pending", message: "Waiting")
+        ]
+
+        model.resetStoredStatuses()
+
+        XCTAssertTrue(model.toasts.isEmpty)
+        XCTAssertEqual(model.presentedActionResult?.kind, .info)
+    }
+
+    @MainActor
+    func testManualGuidanceUsesLargeResultLayoutAndGuidanceCopy() async {
+        let result = ActionExecutionResult(
+            status: .enabled,
+            toast: .timed(type: .success, title: "Reset SMC Guidance", message: "Ready"),
+            activityEvent: ActivityEvent(
+                timestamp: .now,
+                type: .success,
+                title: "Reset SMC Guidance",
+                message: "Manual guidance available."
+            ),
+            debugLog: """
+            Reset SMC Instructions
+            1. Shut down your MacBook.
+            2. Hold Shift + Control + Option and the power button.
+            3. Release all keys and wait.
+            4. Power the MacBook back on.
+            """
+        )
+
+        let model = makeModel(result: result)
+        await model.run(actionID: "smc_reset")
+        model.confirmSystemActionReview()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(model.presentedActionResult?.message, "Follow the guidance below to complete this action safely.")
+        XCTAssertEqual(model.presentedActionResult?.layout, .large)
     }
 
     @MainActor

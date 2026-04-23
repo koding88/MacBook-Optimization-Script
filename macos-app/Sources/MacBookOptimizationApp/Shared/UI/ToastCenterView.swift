@@ -10,7 +10,10 @@ struct ToastCenterView: View {
                 ToastRowView(toast: toast) {
                     dismiss(toast)
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .scale(scale: 0.96).combined(with: .opacity)
+                ))
                 .task(id: toast.id) {
                     guard let dismissAfter = toast.dismissAfter else { return }
                     try? await Task.sleep(nanoseconds: UInt64(dismissAfter * 1_000_000_000))

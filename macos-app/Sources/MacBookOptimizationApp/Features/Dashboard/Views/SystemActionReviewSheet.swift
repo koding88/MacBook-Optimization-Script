@@ -124,16 +124,11 @@ struct SystemActionReviewSheet: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(localizer.text(.systemReviewCommandLabel))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-
-                    Text(step.command)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .foregroundStyle(.secondary)
-                }
+                TerminalCommandPreview(
+                    title: localizer.text(.systemReviewCommandLabel),
+                    command: step.command
+                )
+                .padding(.top, 6)
             }
             .padding(.vertical, 4)
         }

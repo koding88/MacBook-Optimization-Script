@@ -36,4 +36,27 @@ final class ActionFeedbackPresenterTests: XCTestCase {
         XCTAssertEqual(result.summary?.primaryValue, "Apple M2 Pro")
         XCTAssertEqual(result.debugLog, "raw cpu output")
     }
+
+    func testMutationFeedbackUsesSeverityBasedToastDurations() {
+        let presenter = ActionFeedbackPresenter(localizer: AppLocalizer(language: .english))
+        let action = OptimizationAction(
+            id: "dashboard",
+            titleKey: "action.dashboard.title",
+            descriptionKey: "action.dashboard.description",
+            category: .performance,
+            symbolName: "square.grid.2x2",
+            statusFeatureID: "dashboard",
+            isRisky: false,
+            estimatedTime: "Instant",
+            requiresRestart: false,
+            kind: .command([]),
+            status: .ready
+        )
+
+        let success = presenter.presentMutation(action: action, status: .enabled, debugLog: nil)
+        let failure = presenter.presentMutation(action: action, status: .failed, debugLog: "failed")
+
+        XCTAssertEqual(success.toast.dismissAfter, ToastType.success.defaultDismissAfter)
+        XCTAssertEqual(failure.toast.dismissAfter, ToastType.error.defaultDismissAfter)
+    }
 }

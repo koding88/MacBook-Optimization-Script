@@ -18,12 +18,11 @@ struct ActionFeedbackPresenter: ActionFeedbackPresenting {
 
         return ActionExecutionResult(
             status: .enabled,
-            toast: ToastMessage(
+            toast: .timed(
                 type: .success,
                 title: title,
                 message: localizer.inspectionToastMessage(title: title),
-                summaryLines: cappedSummaryLines,
-                dismissAfter: 3
+                summaryLines: cappedSummaryLines
             ),
             activityEvent: ActivityEvent(
                 type: .success,
@@ -51,11 +50,10 @@ struct ActionFeedbackPresenter: ActionFeedbackPresenting {
 
         return ActionExecutionResult(
             status: status,
-            toast: ToastMessage(
+            toast: .timed(
                 type: toastType,
                 title: title,
-                message: message,
-                dismissAfter: isFailure ? 7 : 3
+                message: message
             ),
             activityEvent: ActivityEvent(
                 type: activityType,
