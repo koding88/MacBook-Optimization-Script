@@ -5,7 +5,14 @@ import CoreGraphics
 
 final class SystemInfoProvider: SystemInfoProviding {
     private let snapshotProvider = SystemSnapshotProvider()
-    private let formatter = SystemInfoFormatter(localizer: AppLocalizer(language: .english))
+    private let localizer: AppLocalizer
+    private var formatter: SystemInfoFormatter {
+        SystemInfoFormatter(localizer: localizer)
+    }
+
+    init(localizer: AppLocalizer = AppLocalizer(language: .english)) {
+        self.localizer = localizer
+    }
 
     struct HardwareSnapshot: Equatable {
         let marketingModel: String

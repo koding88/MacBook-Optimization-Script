@@ -22,7 +22,9 @@ struct SystemInfoFormatter {
     func storageSummary(totalBytes: Int64, availableBytes: Int64) -> String {
         let totalGigabytes = decimalGigabytes(totalBytes)
         let usedGigabytes = decimalGigabytes(max(availableBytes, 0))
-        return "\(formattedGigabytes(usedGigabytes)) of \(formattedGigabytes(totalGigabytes)) used"
+        let ofText = localizer.text(.commonOf)
+        let usedText = localizer.text(.commonUsed)
+        return "\(formattedGigabytes(usedGigabytes)) \(ofText) \(formattedGigabytes(totalGigabytes)) \(usedText)"
     }
 
     func displaySummary(name: String, resolution: String) -> DisplaySummary {
