@@ -101,7 +101,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private var refreshTask: Task<Void, Never>?
     private var pendingConfirmationIntent: ExecutionIntent?
-    private var latestQuickPanelStates: [String: QuickPanelState] = [:]
+    @Published private var latestQuickPanelStates: [String: QuickPanelState] = [:]
 
     private var localizer: AppLocalizer {
         AppLocalizer(language: settings.language)
@@ -112,17 +112,19 @@ final class OptimizationDashboardViewModel: ObservableObject {
         stateStore: StateStoreProtocol = StateStore(),
         restoreBaselineStore: RestoreBaselineStoreProtocol = RestoreBaselineStore(),
         settings: AppSettingsStore = AppSettingsStore(),
-        systemInfoProvider: SystemInfoProviding = SystemInfoProvider(),
+        systemInfoProvider: SystemInfoProviding? = nil,
         commandExecutor: SystemCommandExecuting = SystemCommandExecutor()
     ) {
         self.stateStore = stateStore
         self.restoreBaselineStore = restoreBaselineStore
         self.settings = settings
-        self.systemInfoProvider = systemInfoProvider
+        self.systemInfoProvider = systemInfoProvider ?? SystemInfoProvider(localizer: AppLocalizer(language: settings.language))
         self.commandExecutor = commandExecutor
         self.engine = engine ?? OptimizationEngine(
             commandExecutor: commandExecutor,
-            stateStore: stateStore
+            stateStore: stateStore,
+            feedbackPresenter: ActionFeedbackPresenter(localizer: AppLocalizer(language: settings.language)),
+            localizer: AppLocalizer(language: settings.language)
         )
         self.actions = OptimizationCatalog.actions()
         loadStatusesFromDisk()
@@ -261,7 +263,9 @@ final class OptimizationDashboardViewModel: ObservableObject {
     }
 
     func showDestination(_ destination: SidebarDestination) {
-        selectedDestination = destination
+        withAnimation(.easeInOut(duration: 0.18)) {
+            selectedDestination = destination
+        }
     }
 
     func openSettings() {
@@ -278,11 +282,14 @@ final class OptimizationDashboardViewModel: ObservableObject {
                 kind: .success,
                 symbolName: "arrow.counterclockwise.circle"
             )
-            presentedActionResult = PresentedActionResult(
-                kind: .info,
-                title: localizer.text(.panelAllStatuses),
-                message: localizer.text(.statusResetMessage),
-                symbolName: "list.bullet.rectangle"
+            showPresentedResult(
+                PresentedActionResult(
+                    kind: .info,
+                    title: localizer.text(.panelAllStatuses),
+                    message: localizer.text(.statusResetMessage),
+                    symbolName: "list.bullet.rectangle",
+                    layout: .compact
+                )
             )
         } catch {
             debugOutput = error.localizedDescription
@@ -292,30 +299,41 @@ final class OptimizationDashboardViewModel: ObservableObject {
                 kind: .failure,
                 symbolName: "exclamationmark.triangle"
             )
-            presentedActionResult = PresentedActionResult(
-                kind: .error,
-                title: localizer.text(.panelAllStatuses),
-                message: localizer.text(.statusResetFailedMessage),
-                symbolName: "exclamationmark.triangle",
-                details: error.localizedDescription
+            showPresentedResult(
+                PresentedActionResult(
+                    kind: .error,
+                    title: localizer.text(.panelAllStatuses),
+                    message: localizer.text(.statusResetFailedMessage),
+                    symbolName: "exclamationmark.triangle",
+                    details: error.localizedDescription,
+                    layout: .medium
+                )
             )
         }
     }
 
     func dismissPresentedActionResult() {
-        presentedActionResult = nil
+        withAnimation(.easeInOut(duration: 0.18)) {
+            presentedActionResult = nil
+        }
     }
 
     func dismissToast(id: ToastMessage.ID) {
-        toasts.removeAll { $0.id == id }
+        withAnimation(.easeInOut(duration: 0.16)) {
+            toasts.removeAll { $0.id == id }
+        }
     }
 
     func deleteActivity(id: ActivityItem.ID) {
-        activityFeed.removeAll { $0.id == id }
+        withAnimation(.easeInOut(duration: 0.16)) {
+            activityFeed.removeAll { $0.id == id }
+        }
     }
 
     func clearAllActivity() {
-        activityFeed.removeAll()
+        withAnimation(.easeInOut(duration: 0.16)) {
+            activityFeed.removeAll()
+        }
     }
 
     func run(actionID: String) async {
@@ -453,11 +471,10 @@ final class OptimizationDashboardViewModel: ObservableObject {
         loadStatusesFromDisk()
         await loadMachineSummary()
         enqueueToast(
-            ToastMessage(
+            .timed(
                 type: .info,
                 title: localizer.text(.statusRefreshedTitle),
-                message: localizer.text(.statusRefreshedMessage),
-                dismissAfter: 3
+                message: localizer.text(.statusRefreshedMessage)
             )
         )
         appendActivity(
@@ -495,11 +512,11 @@ final class OptimizationDashboardViewModel: ObservableObject {
         if action.kind.requiresAdministrator {
             let actionTitle = localizer.string(action.titleKey)
             enqueueToast(
-                ToastMessage(
+                .timed(
                     type: .info,
                     title: localizer.text(.privilegedPromptToastTitle),
                     message: localizer.format(.privilegedPromptToastMessage, actionTitle),
-                    dismissAfter: 4
+                    dismissAfter: 5
                 )
             )
             appendActivity(
@@ -635,11 +652,14 @@ final class OptimizationDashboardViewModel: ObservableObject {
             kind: .warning,
             symbolName: "exclamationmark.triangle"
         )
-        presentedActionResult = PresentedActionResult(
-            kind: .warning,
-            title: actionTitle,
-            message: message,
-            symbolName: action.symbolName
+        showPresentedResult(
+            PresentedActionResult(
+                kind: .warning,
+                title: actionTitle,
+                message: message,
+                symbolName: action.symbolName,
+                layout: .compact
+            )
         )
         latestQuickPanelStates[action.id] = QuickPanelState(
             title: actionTitle,
@@ -657,26 +677,39 @@ final class OptimizationDashboardViewModel: ObservableObject {
             kind: .warning,
             symbolName: "arrow.uturn.backward.circle.badge.exclamationmark"
         )
-        presentedActionResult = PresentedActionResult(
-            kind: .warning,
-            title: localizer.format(.restoreActionTitle, localizer.string(action.titleKey)),
-            message: message,
-            symbolName: action.symbolName
+        showPresentedResult(
+            PresentedActionResult(
+                kind: .warning,
+                title: localizer.format(.restoreActionTitle, localizer.string(action.titleKey)),
+                message: message,
+                symbolName: action.symbolName,
+                layout: .compact
+            )
         )
     }
 
     private func presentNoRestorableActionsResult(title: String) {
-        presentedActionResult = PresentedActionResult(
-            kind: .warning,
-            title: title,
-            message: localizer.text(.restoreNothingAvailableMessage),
-            symbolName: "arrow.uturn.backward.circle"
+        showPresentedResult(
+            PresentedActionResult(
+                kind: .warning,
+                title: title,
+                message: localizer.text(.restoreNothingAvailableMessage),
+                symbolName: "arrow.uturn.backward.circle",
+                layout: .compact
+            )
         )
     }
 
     private func enqueueToast(_ toast: ToastMessage) {
         toasts.insert(toast, at: 0)
         toasts = Array(toasts.prefix(5))
+    }
+
+    private func showPresentedResult(_ result: PresentedActionResult) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            toasts.removeAll()
+            presentedActionResult = result
+        }
     }
 
     private func presentActionResult(
@@ -688,17 +721,60 @@ final class OptimizationDashboardViewModel: ObservableObject {
         let details = result.debugLog?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasSummary = result.summary != nil
         let resolvedKind: PresentedActionResultKind = kind ?? (hasSummary ? .info : .success)
-        let resolvedMessage = message
-            ?? (hasSummary ? localizer.text(.resultDialogInspectionMessage) : localizer.text(.resultDialogCompletedMessage))
+        let trimmedDetails = details?.isEmpty == true ? nil : details
+        let resolvedMessage = message ?? defaultResultMessage(for: action, hasSummary: hasSummary)
 
-        presentedActionResult = PresentedActionResult(
-            kind: resolvedKind,
-            title: localizer.string(action.titleKey),
-            message: resolvedMessage,
-            symbolName: action.symbolName,
-            summary: result.summary,
-            details: details?.isEmpty == true ? nil : details
+        showPresentedResult(
+            PresentedActionResult(
+                kind: resolvedKind,
+                title: localizer.string(action.titleKey),
+                message: resolvedMessage,
+                symbolName: action.symbolName,
+                summary: result.summary,
+                details: trimmedDetails,
+                layout: layoutStyle(for: action, summary: result.summary, details: trimmedDetails)
+            )
         )
+    }
+
+    private func defaultResultMessage(for action: OptimizationAction, hasSummary: Bool) -> String {
+        switch action.kind {
+        case .manual:
+            return localizer.text(.resultDialogGuidanceMessage)
+        default:
+            return hasSummary
+                ? localizer.text(.resultDialogInspectionMessage)
+                : localizer.text(.resultDialogCompletedMessage)
+        }
+    }
+
+    private func layoutStyle(
+        for action: OptimizationAction,
+        summary: ActionResultSummary?,
+        details: String?
+    ) -> PresentedActionResultLayout {
+        let detailLineCount = details?.split(whereSeparator: \.isNewline).count ?? 0
+
+        switch action.kind {
+        case .manual:
+            return .large
+        default:
+            break
+        }
+
+        if summary != nil {
+            return details == nil ? .medium : (detailLineCount >= 8 ? .large : .medium)
+        }
+
+        if detailLineCount >= 10 {
+            return .large
+        }
+
+        if detailLineCount >= 4 {
+            return .medium
+        }
+
+        return .compact
     }
 
     private func presentExecutionError(
@@ -740,17 +816,21 @@ final class OptimizationDashboardViewModel: ObservableObject {
             details = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        presentedActionResult = PresentedActionResult(
-            kind: kind,
-            title: title,
-            message: message,
-            symbolName: action.symbolName,
-            details: details?.isEmpty == true ? nil : details
+        let trimmedDetails = details?.isEmpty == true ? nil : details
+        showPresentedResult(
+            PresentedActionResult(
+                kind: kind,
+                title: title,
+                message: message,
+                symbolName: action.symbolName,
+                details: trimmedDetails,
+                layout: trimmedDetails == nil ? .compact : .medium
+            )
         )
         latestQuickPanelStates[action.id] = QuickPanelState(
             title: title,
             symbolName: action.symbolName,
-            details: details?.isEmpty == true ? message : details,
+            details: trimmedDetails ?? message,
             resultKind: kind
         )
     }
