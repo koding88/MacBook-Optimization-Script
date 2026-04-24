@@ -76,6 +76,10 @@ struct SystemProfilerJSONReader {
         guard task.terminationStatus == 0 else { return nil }
 
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return Self.entries(in: data, for: dataType)
+    }
+
+    static func entries(in data: Data, for dataType: String) -> [[String: Any]]? {
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let entries = json[dataType] as? [[String: Any]]

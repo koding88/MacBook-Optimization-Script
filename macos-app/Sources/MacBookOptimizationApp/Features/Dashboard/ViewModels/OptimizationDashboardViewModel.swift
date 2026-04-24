@@ -9,6 +9,7 @@ enum SidebarDestination: Hashable {
     case activity
     case logs
     case cpu
+    case gpu
     case memory
     case battery
     case mdm
@@ -92,6 +93,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
         )
     ]
     @Published var cpuSnapshotViewModel: CPUSnapshotViewModel?
+    @Published var gpuSnapshotViewModel: GPUSnapshotViewModel?
     @Published var memorySnapshotViewModel: MemorySnapshotViewModel?
     @Published var batterySnapshotViewModel: BatterySnapshotViewModel?
     @Published var mdmSnapshotViewModel: MDMSnapshotViewModel?
@@ -136,6 +138,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
         
         // Initialize CPU snapshot view model once
         self.cpuSnapshotViewModel = CPUSnapshotViewModel()
+        self.gpuSnapshotViewModel = GPUSnapshotViewModel()
         self.memorySnapshotViewModel = MemorySnapshotViewModel()
         self.batterySnapshotViewModel = BatterySnapshotViewModel()
         self.mdmSnapshotViewModel = MDMSnapshotViewModel(commandExecutor: commandExecutor)
@@ -151,6 +154,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     func stopAllMonitoring() {
         cpuSnapshotViewModel?.stopMonitoring()
+        gpuSnapshotViewModel?.stopMonitoring()
         memorySnapshotViewModel?.stopMonitoring()
         batterySnapshotViewModel?.stopMonitoring()
     }
@@ -178,6 +182,8 @@ final class OptimizationDashboardViewModel: ObservableObject {
         switch selectedDestination {
         case .cpu:
             actionID = "system_check_cpu"
+        case .gpu:
+            actionID = "system_check_gpu"
         case .memory:
             actionID = "system_check_memory"
         case .battery:
@@ -754,13 +760,25 @@ final class OptimizationDashboardViewModel: ObservableObject {
     }
 
     private func defaultResultMessage(for action: OptimizationAction, hasSummary: Bool) -> String {
+        let inspectionActionIDs: Set<String> = [
+            "system_check_battery",
+            "system_check_cpu",
+            "system_check_memory",
+            "system_check_gpu",
+            "system_check_disk",
+            "system_check_network",
+            "system_check_thermal",
+            "mdm_status"
+        ]
+
         switch action.kind {
         case .manual:
             return localizer.text(.resultDialogGuidanceMessage)
         default:
-            return hasSummary
-                ? localizer.text(.resultDialogInspectionMessage)
-                : localizer.text(.resultDialogCompletedMessage)
+            if hasSummary || inspectionActionIDs.contains(action.id) {
+                return localizer.text(.resultDialogGuidanceMessage)
+            }
+            return localizer.text(.resultDialogCompletedMessage)
         }
     }
 
@@ -1041,7 +1059,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
     }
 
     private func makeQuickPanelState(from result: ActionExecutionResult, action: OptimizationAction) -> QuickPanelState? {
-        guard ["system_check_cpu", "system_check_memory", "system_check_battery", "mdm_status"].contains(action.id) else {
+        guard ["system_check_cpu", "system_check_gpu", "system_check_memory", "system_check_battery", "mdm_status"].contains(action.id) else {
             return nil
         }
 

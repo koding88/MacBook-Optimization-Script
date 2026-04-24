@@ -124,6 +124,7 @@ struct DashboardView: View {
 
             Section(localizer.text(.quickPanels)) {
                 sidebarItem(localizer.text(.panelCPU), systemImage: "cpu", destination: .cpu)
+                sidebarItem(localizer.text(.panelGPU), systemImage: "display.2", destination: .gpu)
                 sidebarItem(localizer.text(.panelMemory), systemImage: "memorychip", destination: .memory)
                 sidebarItem(localizer.text(.panelBattery), systemImage: "battery.75percent", destination: .battery)
                 sidebarItem(localizer.text(.panelMDM), systemImage: "building.2.crop.circle", destination: .mdm)
@@ -173,7 +174,7 @@ struct DashboardView: View {
             )
         case .category(let category):
             categoryDetail(category)
-        case .cpu, .memory, .battery, .mdm:
+        case .cpu, .gpu, .memory, .battery, .mdm:
             quickPanelDetail
         }
     }

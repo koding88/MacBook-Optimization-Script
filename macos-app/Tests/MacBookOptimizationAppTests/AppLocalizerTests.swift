@@ -116,7 +116,21 @@ final class AppLocalizerTests: XCTestCase {
     func testMemoryReviewPlanUsesLocalizedStepCopy() {
         let english = AppLocalizer(language: .english)
         let vietnamese = AppLocalizer(language: .vietnamese)
-        let action = try! XCTUnwrap(OptimizationCatalog.actions().first(where: { $0.id == "system_check_memory" }))
+        let action = OptimizationAction(
+            id: "system_check_memory",
+            titleKey: "action.system_check_memory.title",
+            descriptionKey: "action.system_check_memory.description",
+            category: .monitoring,
+            symbolName: "memorychip",
+            statusFeatureID: nil,
+            isRisky: false,
+            estimatedTime: "5-10 seconds",
+            requiresRestart: false,
+            restoreBehavior: .notRestorableInspection(reasonKey: "restore.reason.inspection"),
+            kind: .command(MemorySnapshotCommand.requests),
+            status: .ready,
+            lastRunDescription: nil
+        )
 
         let englishPlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: english))
         let vietnamesePlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: vietnamese))

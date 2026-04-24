@@ -54,6 +54,11 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
             return nil
         }
 
+        // Battery snapshot remains a single-click inspection flow instead of a step review sheet.
+        if action.id == "system_check_battery" {
+            return nil
+        }
+
         let steps = requests.enumerated().map { index, request in
             let descriptor = descriptor(for: action.id, request: request, stepIndex: index, localizer: localizer, mode: .run)
             return SystemActionReviewStep(

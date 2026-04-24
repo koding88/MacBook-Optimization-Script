@@ -31,6 +31,9 @@ struct QuickPanelDetailView: View {
             if action.id == "system_check_cpu", let cpuVM = model.cpuSnapshotViewModel {
                 CPUSnapshotView(viewModel: cpuVM)
                     .navigationTitle(localizer.string(action.titleKey))
+            } else if action.id == "system_check_gpu", let gpuVM = model.gpuSnapshotViewModel {
+                GPUSnapshotView(viewModel: gpuVM)
+                    .navigationTitle(localizer.string(action.titleKey))
             } else if action.id == "system_check_memory", let memoryVM = model.memorySnapshotViewModel {
                 MemorySnapshotView(viewModel: memoryVM)
                     .navigationTitle(localizer.string(action.titleKey))
