@@ -6,6 +6,7 @@ import CoreGraphics
 final class SystemInfoProvider: SystemInfoProviding {
     private let snapshotProvider = SystemSnapshotProvider()
     private let localizer: AppLocalizer
+    private let systemProfilerReader = SystemProfilerJSONReader()
     private var formatter: SystemInfoFormatter {
         SystemInfoFormatter(localizer: localizer)
     }
@@ -125,32 +126,7 @@ final class SystemInfoProvider: SystemInfoProviding {
     }
 
     private func systemProfilerEntries(for dataType: String) -> [[String: Any]]? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
-        task.arguments = [dataType, "-json"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-        } catch {
-            return nil
-        }
-
-        guard task.terminationStatus == 0 else { return nil }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let entries = json[dataType] as? [[String: Any]]
-        else {
-            return nil
-        }
-
-        return entries
+        systemProfilerReader.entries(for: dataType)
     }
 
     static func hardwareSnapshot(from entry: [String: Any]) -> HardwareSnapshot? {

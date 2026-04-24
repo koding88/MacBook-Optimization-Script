@@ -18,6 +18,12 @@ enum SystemCommandExecutorError: LocalizedError {
 }
 
 final class SystemCommandExecutor: SystemCommandExecuting {
+    private let authService: AuthorizationService
+    
+    init(authService: AuthorizationService = .shared) {
+        self.authService = authService
+    }
+    
     func execute(_ request: CommandRequest) async throws -> CommandExecutionResult {
         if request.requiresAdministrator {
             return try await executeWithAdministratorPrivileges(request.command)
@@ -43,36 +49,18 @@ final class SystemCommandExecutor: SystemCommandExecuting {
     }
 
     private func executeWithAdministratorPrivileges(_ command: String) async throws -> CommandExecutionResult {
-        let escapedCommand = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-
-        let script = "do shell script \"\(escapedCommand)\" with administrator privileges"
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if process.terminationStatus != 0 {
-            if Self.isUserCancelledAdministratorPrompt(output) {
-                throw SystemCommandExecutorError.administratorAuthorizationCancelled
-            }
-
-            throw SystemCommandExecutorError.administratorExecutionFailed(
-                output.isEmpty ? "Administrator command failed." : output
+        // Use shared authorization service - no password prompt after first time
+        do {
+            let output = try await authService.executeWithPrivileges(
+                command: "/bin/zsh",
+                arguments: ["-c", command]
             )
+            return CommandExecutionResult(output: output, exitCode: 0)
+        } catch AuthorizationError.notAuthorized {
+            throw SystemCommandExecutorError.administratorAuthorizationCancelled
+        } catch {
+            throw SystemCommandExecutorError.administratorExecutionFailed(error.localizedDescription)
         }
-
-        return CommandExecutionResult(output: output, exitCode: process.terminationStatus)
     }
 
     static func isUserCancelledAdministratorPrompt(_ output: String) -> Bool {
