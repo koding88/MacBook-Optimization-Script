@@ -110,36 +110,43 @@ struct DashboardView: View {
             set: { if let value = $0 { model.showDestination(value) } }
         )) {
             Section(localizer.text(.summaryTitle)) {
-                Label(localizer.text(.panelDashboard), systemImage: "macwindow")
-                    .tag(SidebarDestination.dashboard)
-                Label(localizer.text(.panelAllStatuses), systemImage: "list.bullet.rectangle")
-                    .tag(SidebarDestination.statuses)
-                Label(localizer.text(.activityTitle), systemImage: "bell.badge")
-                    .tag(SidebarDestination.activity)
-                Label(localizer.text(.logsTitle), systemImage: "terminal")
-                    .tag(SidebarDestination.logs)
+                sidebarItem(localizer.text(.panelDashboard), systemImage: "macwindow", destination: .dashboard)
+                sidebarItem(localizer.text(.panelAllStatuses), systemImage: "list.bullet.rectangle", destination: .statuses)
+                sidebarItem(localizer.text(.activityTitle), systemImage: "bell.badge", destination: .activity)
+                sidebarItem(localizer.text(.logsTitle), systemImage: "terminal", destination: .logs)
             }
 
             Section(localizer.text(.categories)) {
                 ForEach(ActionCategory.allCases) { category in
-                    Label(category.rawValue, systemImage: category.symbolName)
-                        .tag(SidebarDestination.category(category))
+                    sidebarItem(category.rawValue, systemImage: category.symbolName, destination: .category(category))
                 }
             }
 
             Section(localizer.text(.quickPanels)) {
-                Label(localizer.text(.panelCPU), systemImage: "cpu")
-                    .tag(SidebarDestination.cpu)
-                Label(localizer.text(.panelMemory), systemImage: "memorychip")
-                    .tag(SidebarDestination.memory)
-                Label(localizer.text(.panelBattery), systemImage: "battery.75percent")
-                    .tag(SidebarDestination.battery)
-                Label(localizer.text(.panelMDM), systemImage: "building.2.crop.circle")
-                    .tag(SidebarDestination.mdm)
+                sidebarItem(localizer.text(.panelCPU), systemImage: "cpu", destination: .cpu)
+                sidebarItem(localizer.text(.panelMemory), systemImage: "memorychip", destination: .memory)
+                sidebarItem(localizer.text(.panelBattery), systemImage: "battery.75percent", destination: .battery)
+                sidebarItem(localizer.text(.panelMDM), systemImage: "building.2.crop.circle", destination: .mdm)
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(Color(nsColor: .underPageBackgroundColor))
         .navigationTitle(localizer.text(.appTitle))
+    }
+
+    private func sidebarItem(_ title: String, systemImage: String, destination: SidebarDestination) -> some View {
+        Label {
+            Text(title)
+                .font(.body.weight(model.selectedDestination == destination ? .semibold : .regular))
+        } icon: {
+            Image(systemName: systemImage)
+                .symbolVariant(model.selectedDestination == destination ? .fill : .none)
+                .foregroundStyle(model.selectedDestination == destination ? Color.accentColor : .secondary)
+                .frame(width: 18)
+        }
+        .padding(.vertical, 4)
+        .tag(destination)
     }
 
     @ViewBuilder

@@ -42,6 +42,54 @@ final class MemoryMetricsParserTests: XCTestCase {
         XCTAssertEqual(metrics?.usedBytes, 25_426_853_888)
         XCTAssertEqual(metrics?.cachedBytes, 8_012_775_424)
         XCTAssertEqual(metrics?.freeBytes, 271_876_096)
-        XCTAssertEqual(metrics?.pressureLevel, .elevated)
+        XCTAssertEqual(metrics?.pressureLevel, .normal)
+    }
+
+    func testPressureLevelStaysNormalWhenCachedMemoryIsHealthyAndSwapIsZero() {
+        let metrics = MemoryMetrics(
+            timestamp: .now,
+            totalBytes: 34_359_738_368,
+            appBytes: 15_795_142_656,
+            wiredBytes: 2_553_389_056,
+            compressedBytes: 7_077_298_176,
+            cachedBytes: 8_012_775_424,
+            freeBytes: 271_876_096,
+            swapUsedBytes: 0,
+            pageSizeBytes: 16_384
+        )
+
+        XCTAssertEqual(metrics.pressureLevel, .normal)
+    }
+
+    func testPressureLevelBecomesElevatedWhenSwapStartsGrowingAndAvailableMemoryShrinks() {
+        let metrics = MemoryMetrics(
+            timestamp: .now,
+            totalBytes: 17_179_869_184,
+            appBytes: 9_663_676_416,
+            wiredBytes: 2_791_546_880,
+            compressedBytes: 2_147_483_648,
+            cachedBytes: 858_993_459,
+            freeBytes: 257_698_038,
+            swapUsedBytes: 536_870_912,
+            pageSizeBytes: 16_384
+        )
+
+        XCTAssertEqual(metrics.pressureLevel, .elevated)
+    }
+
+    func testPressureLevelBecomesCriticalWhenSwapUsageIsHeavy() {
+        let metrics = MemoryMetrics(
+            timestamp: .now,
+            totalBytes: 17_179_869_184,
+            appBytes: 10_737_418_240,
+            wiredBytes: 3_006_477_107,
+            compressedBytes: 2_362_232_012,
+            cachedBytes: 429_496_729,
+            freeBytes: 171_798_691,
+            swapUsedBytes: 2_684_354_560,
+            pageSizeBytes: 16_384
+        )
+
+        XCTAssertEqual(metrics.pressureLevel, .critical)
     }
 }

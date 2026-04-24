@@ -46,22 +46,35 @@ struct MemoryMetrics: Equatable {
     }
 
     var pressureScore: Double {
-        let reclaimableRatio = min((Double(availableBytes) / safeTotalBytes), 1)
-        let baseScore = usedRatio * 0.58
-            + compressedRatio * 0.34
-            + min(swapRatio * 1.4, 0.45)
-            - reclaimableRatio * 0.16
+        let availableRatio = ratio(for: availableBytes)
+        let wiredRatio = ratio(for: wiredBytes)
+        let compressionWeight = max(compressedRatio - 0.12, 0) * 1.2
+        let swapWeight = min(swapRatio * 2.4, 0.72)
+        let wiredWeight = max(wiredRatio - 0.18, 0) * 0.55
+        let availableWeight = max(0.24 - availableRatio, 0) * 1.9
 
-        return min(max(baseScore, 0.08), 1)
+        return min(max(0.1 + compressionWeight + swapWeight + wiredWeight + availableWeight, 0), 1)
     }
 
     var pressureLevel: PressureLevel {
-        if swapUsedBytes > 512 * 1_024 * 1_024 || pressureScore >= 0.78 {
+        let availableRatio = ratio(for: availableBytes)
+
+        if swapUsedBytes >= 2 * 1_024 * 1_024 * 1_024 || pressureScore >= 0.8 {
             return .critical
         }
-        if pressureScore >= 0.55 || compressedRatio >= 0.16 {
+
+        if swapUsedBytes >= 512 * 1_024 * 1_024 && availableRatio < 0.1 {
             return .elevated
         }
+
+        if compressedRatio >= 0.24 && availableRatio < 0.12 {
+            return .elevated
+        }
+
+        if pressureScore >= 0.46 {
+            return .elevated
+        }
+
         return .normal
     }
 

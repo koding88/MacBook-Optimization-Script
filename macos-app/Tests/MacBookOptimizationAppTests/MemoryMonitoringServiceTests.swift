@@ -36,7 +36,7 @@ final class MemoryMonitoringServiceTests: XCTestCase {
         XCTAssertEqual(metrics.usedBytes, 25_426_853_888)
         XCTAssertEqual(metrics.cachedBytes, 8_012_775_424)
         XCTAssertEqual(metrics.freeBytes, 271_876_096)
-        XCTAssertEqual(metrics.pressureLevel, MemoryMetrics.PressureLevel.elevated)
+        XCTAssertEqual(metrics.pressureLevel, MemoryMetrics.PressureLevel.normal)
     }
 
     func testNativeMemorySnapshotCollectorDefaultsSwapToZeroWhenUnavailable() throws {

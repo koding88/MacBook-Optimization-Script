@@ -31,6 +31,8 @@
 "action.safe" = "Low risk";
 "action.lastRun" = "Last Run";
 "common.noData" = "No data";
+"common.paused" = "Paused";
+"common.live" = "Live";
 "confirm.title" = "Confirm action";
 "confirm.message" = "This action can affect system behavior. Continue?";
 "confirm.continue" = "Continue";
@@ -109,6 +111,19 @@
 "memory.snapshot.compressed" = "Compressed";
 "memory.snapshot.freeMemory" = "Free Memory";
 "memory.snapshot.failed" = "Unable to load memory snapshot.";
+"memory.snapshot.section.capacity" = "Capacity";
+"memory.snapshot.section.usage" = "Usage";
+"memory.snapshot.section.system" = "System";
+"memory.snapshot.usageFootprint" = "%@ active footprint";
+"memory.snapshot.pressure.axis.low" = "Low";
+"memory.snapshot.pressure.axis.medium" = "Medium";
+"memory.snapshot.pressure.axis.high" = "High";
+"memory.snapshot.pressure.axis.critical" = "Critical";
+"memory.snapshot.pressure.legend.normal" = "Normal zone";
+"memory.snapshot.pressure.legend.elevated" = "Elevated zone";
+"memory.snapshot.pressure.legend.critical" = "Critical zone";
+"memory.snapshot.pressure.stable" = "Stable";
+"memory.snapshot.loading" = "Loading...";
 
 "battery.snapshot.title" = "Battery Snapshot";
 "battery.snapshot.autoRefresh" = "Auto Refresh";
