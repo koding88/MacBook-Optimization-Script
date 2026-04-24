@@ -1,5 +1,11 @@
 "app.title" = "MacBook Optimization";
 "sidebar.categories" = "Danh mục";
+"category.system" = "Hệ thống";
+"category.network" = "Mạng";
+"category.storage" = "Lưu trữ";
+"category.performance" = "Hiệu năng";
+"category.maintenance" = "Bảo trì";
+"category.monitoring" = "Theo dõi";
 "sidebar.quickPanels" = "Bảng nhanh";
 "detail.summary" = "Tổng quan";
 "detail.actions" = "Tác vụ";

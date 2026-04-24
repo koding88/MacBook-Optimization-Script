@@ -118,7 +118,7 @@ struct DashboardView: View {
 
             Section(localizer.text(.categories)) {
                 ForEach(ActionCategory.allCases) { category in
-                    sidebarItem(category.rawValue, systemImage: category.symbolName, destination: .category(category))
+                    sidebarItem(localizer.text(category.localizedKey), systemImage: category.symbolName, destination: .category(category))
                 }
             }
 
@@ -208,7 +208,7 @@ struct DashboardView: View {
             Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(category.rawValue)
+                        Text(localizer.text(category.localizedKey))
                             .font(.title3.weight(.semibold))
 
                         Text(localizer.text(.actionsTitle))

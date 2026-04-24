@@ -10,6 +10,17 @@ enum ActionCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var localizedKey: LocalizedKey {
+        switch self {
+        case .system: .categorySystem
+        case .network: .categoryNetwork
+        case .storage: .categoryStorage
+        case .performance: .categoryPerformance
+        case .maintenance: .categoryMaintenance
+        case .monitoring: .categoryMonitoring
+        }
+    }
+
     var symbolName: String {
         switch self {
         case .system: "cpu"

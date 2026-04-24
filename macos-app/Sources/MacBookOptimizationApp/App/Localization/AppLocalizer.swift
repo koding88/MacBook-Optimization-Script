@@ -3,6 +3,12 @@ import Foundation
 enum LocalizedKey: String {
     case appTitle = "app.title"
     case categories = "sidebar.categories"
+    case categorySystem = "category.system"
+    case categoryNetwork = "category.network"
+    case categoryStorage = "category.storage"
+    case categoryPerformance = "category.performance"
+    case categoryMaintenance = "category.maintenance"
+    case categoryMonitoring = "category.monitoring"
     case quickPanels = "sidebar.quickPanels"
     case summaryTitle = "detail.summary"
     case actionsTitle = "detail.actions"

@@ -1,5 +1,11 @@
 "app.title" = "MacBook Optimization";
 "sidebar.categories" = "Categories";
+"category.system" = "System";
+"category.network" = "Network";
+"category.storage" = "Storage";
+"category.performance" = "Performance";
+"category.maintenance" = "Maintenance";
+"category.monitoring" = "Monitoring";
 "sidebar.quickPanels" = "Quick Panels";
 "detail.summary" = "Overview";
 "detail.actions" = "Actions";
