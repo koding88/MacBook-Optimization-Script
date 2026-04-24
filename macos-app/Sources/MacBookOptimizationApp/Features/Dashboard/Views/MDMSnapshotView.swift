@@ -3,25 +3,49 @@ import SwiftUI
 struct MDMSnapshotView: View {
     @ObservedObject var viewModel: MDMSnapshotViewModel
     @EnvironmentObject private var dashboardModel: OptimizationDashboardViewModel
-    
+
+    private let cardCornerRadius: CGFloat = 12
+    private let statusLoadingBlur: CGFloat = 5.5
+
     private var localizer: AppLocalizer {
         AppLocalizer(language: dashboardModel.settings.language)
     }
-    
+
+    private var statusDisplayMetrics: MDMMetrics {
+        viewModel.currentMetrics ?? placeholderMetrics
+    }
+
+    private var shouldBlurStatusContent: Bool {
+        viewModel.currentMetrics == nil && viewModel.isLoading
+    }
+
+    private var placeholderMetrics: MDMMetrics {
+        MDMMetrics(
+            timestamp: .now,
+            depTracePresent: false,
+            mdmTracePresent: false,
+            enrolledViaDEP: false,
+            mdmEnrolled: false,
+            bypassHostsDetected: false,
+            depConfig: nil,
+            installedProfiles: []
+        )
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 headerSection
-                
+
                 if let metrics = viewModel.currentMetrics {
                     statusOverview(metrics: metrics)
-                    
+
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 16) {
                             enrollmentCard(metrics: metrics)
                             depAssignmentCard(metrics: metrics)
                         }
-                        
+
                         VStack(spacing: 16) {
                             enrollmentCard(metrics: metrics)
                             depAssignmentCard(metrics: metrics)
@@ -36,6 +60,7 @@ struct MDMSnapshotView: View {
                     
                     resetRiskCard(metrics: metrics)
                 } else if viewModel.isLoading {
+                    statusOverview(metrics: statusDisplayMetrics)
                     ProgressView(localizer.text(.mdmSnapshotChecking))
                         .frame(maxWidth: .infinity, minHeight: 240)
                 } else if let error = viewModel.error {
@@ -52,23 +77,22 @@ struct MDMSnapshotView: View {
             }
         }
     }
-    
+
     private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(localizer.text(.mdmSnapshotTitle))
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
+                    .font(.title2.weight(.semibold))
+
                 if let metrics = viewModel.currentMetrics {
                     Text(statusText(metrics.enrollmentStatus))
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
-            
+
             Spacer()
-            
+
             Button(action: { viewModel.refresh() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise")
@@ -78,178 +102,178 @@ struct MDMSnapshotView: View {
             .buttonStyle(.bordered)
             .disabled(viewModel.isLoading)
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(cardBackground)
+        .overlay(cardBorder)
+        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
     }
-    
+
     private func statusOverview(metrics: MDMMetrics) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: statusIcon(metrics.enrollmentStatus))
-                .font(.system(size: 32))
-                .foregroundStyle(statusColor(metrics.enrollmentStatus))
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(statusText(metrics.enrollmentStatus))
-                    .font(.headline)
-                
-                Text(statusDescription(metrics))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+        snapshotCard {
+            HStack(alignment: .top, spacing: 14) {
+                statusIconTile(for: metrics.enrollmentStatus)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(statusText(metrics.enrollmentStatus))
+                            .font(.headline)
+
+                        statusBadge(
+                            text: statusCapsuleText(metrics),
+                            color: statusColor(metrics.enrollmentStatus)
+                        )
+                    }
+
+                    Text(statusDescription(metrics))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
             }
-            
-            Spacer()
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .blur(radius: shouldBlurStatusContent ? statusLoadingBlur : 0)
+        .overlay {
+            if shouldBlurStatusContent {
+                loadingOverlay(text: localizer.text(.mdmSnapshotChecking))
+            }
+        }
     }
-    
+
     private func enrollmentCard(metrics: MDMMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(localizer.text(.mdmSnapshotEnrollmentStatus))
-                    .font(.headline)
-                
+        snapshotCard {
+            HStack(alignment: .top, spacing: 12) {
+                sectionHeader(
+                    title: localizer.text(.mdmSnapshotEnrollmentStatus),
+                    subtitle: enrollmentInsight(metrics)
+                )
+
                 Spacer()
-                
+
                 statusBadge(
                     text: metrics.mdmEnrolled ? localizer.text(.commonYes) : localizer.text(.commonNo),
-                    color: metrics.mdmEnrolled ? .green : .gray
+                    color: metrics.mdmEnrolled ? .green : .secondary
                 )
             }
-            
-            Divider()
-            
-            infoRow(
-                icon: "checkmark.circle",
+
+            compactInfoRow(
+                icon: "checkmark.circle.fill",
                 title: localizer.text(.mdmSnapshotCurrentEnrollment),
                 value: metrics.mdmEnrolled ? localizer.text(.commonYes) : localizer.text(.commonNo),
-                valueColor: metrics.mdmEnrolled ? .green : .secondary
+                tint: metrics.mdmEnrolled ? .green : .secondary
             )
-            
-            infoRow(
-                icon: "arrow.down.circle",
+
+            compactInfoRow(
+                icon: "arrow.down.circle.fill",
                 title: localizer.text(.mdmSnapshotEnrolledViaDEP),
                 value: metrics.enrolledViaDEP ? localizer.text(.commonYes) : localizer.text(.commonNo),
-                valueColor: metrics.enrolledViaDEP ? .green : .secondary
+                tint: metrics.enrolledViaDEP ? .blue : .secondary
             )
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     private func depAssignmentCard(metrics: MDMMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(localizer.text(.mdmSnapshotDEPAssignment))
-                    .font(.headline)
-                
+        snapshotCard {
+            HStack(alignment: .top, spacing: 12) {
+                sectionHeader(
+                    title: localizer.text(.mdmSnapshotDEPAssignment),
+                    subtitle: metrics.depConfig != nil
+                        ? localizer.text(.mdmSnapshotDEPConfigured)
+                        : localizer.text(.mdmSnapshotNoDEPConfig)
+                )
+
                 Spacer()
-                
+
                 statusBadge(
                     text: metrics.depConfig != nil ? localizer.text(.mdmSnapshotAssigned) : localizer.text(.mdmSnapshotNotAssigned),
-                    color: metrics.depConfig != nil ? .orange : .gray
+                    color: metrics.depConfig != nil ? .orange : .secondary
                 )
             }
-            
-            Divider()
-            
+
             if let config = metrics.depConfig {
-                infoRow(
-                    icon: "building.2",
+                compactInfoRow(
+                    icon: "building.2.fill",
                     title: localizer.text(.mdmSnapshotOrganization),
                     value: config.organizationName ?? localizer.text(.unavailable),
-                    valueColor: .primary
+                    tint: .orange
                 )
-                
+
                 if let url = config.configurationURL {
-                    infoRow(
-                        icon: "link",
+                    compactInfoRow(
+                        icon: "link.circle.fill",
                         title: localizer.text(.mdmSnapshotMDMServer),
                         value: extractDomain(from: url),
-                        valueColor: .primary
+                        tint: .blue
                     )
                 }
             } else {
                 Text(localizer.text(.mdmSnapshotNoDEPConfig))
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     private func historicalTracesCard(metrics: MDMMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(localizer.text(.mdmSnapshotHistoricalTraces))
-                .font(.headline)
-            
-            Divider()
-            
-            infoRow(
+        snapshotCard {
+            sectionHeader(
+                title: localizer.text(.mdmSnapshotHistoricalTraces),
+                subtitle: localizer.text(.mdmSnapshotHistoricalActivity)
+            )
+
+            compactInfoRow(
                 icon: metrics.depTracePresent ? "checkmark.circle.fill" : "xmark.circle",
                 title: localizer.text(.mdmSnapshotDEPTraces),
                 value: metrics.depTracePresent ? localizer.text(.mdmSnapshotPresent) : localizer.text(.mdmSnapshotAbsent),
-                valueColor: metrics.depTracePresent ? .orange : .secondary
+                tint: metrics.depTracePresent ? .orange : .secondary
             )
-            
-            infoRow(
+
+            compactInfoRow(
                 icon: metrics.mdmTracePresent ? "checkmark.circle.fill" : "xmark.circle",
                 title: localizer.text(.mdmSnapshotMDMTraces),
                 value: metrics.mdmTracePresent ? localizer.text(.mdmSnapshotPresent) : localizer.text(.mdmSnapshotAbsent),
-                valueColor: metrics.mdmTracePresent ? .orange : .secondary
+                tint: metrics.mdmTracePresent ? .orange : .secondary
             )
-            
-            infoRow(
+
+            compactInfoRow(
                 icon: metrics.bypassHostsDetected ? "exclamationmark.triangle.fill" : "checkmark.circle",
                 title: localizer.text(.mdmSnapshotHostsBypass),
                 value: metrics.bypassHostsDetected ? localizer.text(.mdmSnapshotDetected) : localizer.text(.mdmSnapshotNotDetected),
-                valueColor: metrics.bypassHostsDetected ? .red : .green
+                tint: metrics.bypassHostsDetected ? .red : .green
             )
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
     }
-    
+
     private func depConfigurationCard(config: MDMMetrics.DEPConfiguration) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(localizer.text(.mdmSnapshotDEPConfiguration))
-                .font(.headline)
-            
-            Divider()
-            
-            if let org = config.organizationName {
-                configRow(title: localizer.text(.mdmSnapshotOrganization), value: org)
-            }
-            
-            if let url = config.configurationURL {
-                configRow(title: localizer.text(.mdmSnapshotMDMServer), value: extractDomain(from: url))
-            }
-            
+        snapshotCard {
+            sectionHeader(
+                title: localizer.text(.mdmSnapshotDEPConfiguration),
+                subtitle: policyInsight(config)
+            )
+
             configRow(
                 title: localizer.text(.mdmSnapshotSupervised),
-                value: config.isSupervised ? localizer.text(.commonYes) : localizer.text(.commonNo)
+                value: config.isSupervised ? localizer.text(.commonYes) : localizer.text(.commonNo),
+                tint: config.isSupervised ? .green : .secondary
             )
-            
+
             configRow(
                 title: localizer.text(.mdmSnapshotRemovable),
-                value: config.isMDMUnremovable ? localizer.text(.commonNo) : localizer.text(.commonYes)
+                value: config.isMDMUnremovable ? localizer.text(.commonNo) : localizer.text(.commonYes),
+                tint: config.isMDMUnremovable ? .orange : .green
             )
-            
+
             configRow(
                 title: localizer.text(.mdmSnapshotMandatory),
-                value: config.isMandatory ? localizer.text(.commonYes) : localizer.text(.commonNo)
+                value: config.isMandatory ? localizer.text(.commonYes) : localizer.text(.commonNo),
+                tint: config.isMandatory ? .orange : .secondary
             )
-            
+
             if !config.skipSetupItems.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localizer.text(.mdmSnapshotSkipSetup))
@@ -262,82 +286,95 @@ struct MDMSnapshotView: View {
                                 .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.blue.opacity(0.1))
-                                .foregroundColor(.blue)
-                                .cornerRadius(4)
+                                .background(Color.blue.opacity(0.1), in: Capsule())
+                                .foregroundStyle(.blue)
                         }
-                        
+
                         if config.skipSetupItems.count > 10 {
                             Text("+\(config.skipSetupItems.count - 10)")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
                 .padding(.top, 4)
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
     }
-    
+
     private func resetRiskCard(metrics: MDMMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(localizer.text(.mdmSnapshotResetRisk))
-                    .font(.headline)
-                
+        snapshotCard {
+            HStack(alignment: .top, spacing: 12) {
+                sectionHeader(
+                    title: localizer.text(.mdmSnapshotResetRisk),
+                    subtitle: riskDescription(metrics)
+                )
+
                 Spacer()
-                
+
                 statusBadge(
                     text: riskText(metrics.resetRisk),
                     color: riskColor(metrics.resetRisk)
                 )
             }
-            
-            Divider()
-            
-            Text(riskDescription(metrics))
-                .font(.subheadline)
-                .foregroundColor(.secondary)
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
     }
-    
-    private func infoRow(icon: String, title: String, value: String, valueColor: Color = .primary) -> some View {
+
+    private func snapshotCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12, content: content)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(cardBackground)
+            .overlay(cardBorder)
+            .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+    }
+
+    private func sectionHeader(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.headline)
+
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func compactInfoRow(icon: String, title: String, value: String, tint: Color) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            
-            Text(title)
-                .font(.subheadline)
-            
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 26, height: 26)
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+
+                Text(value)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+            }
+
             Spacer()
-            
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(valueColor)
         }
     }
-    
-    private func configRow(title: String, value: String) -> some View {
+
+    private func configRow(title: String, value: String, tint: Color) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .font(.subheadline)
-            
+
             Spacer(minLength: 12)
-            
+
             Text(value)
                 .font(.subheadline.weight(.medium))
+                .foregroundStyle(tint)
                 .multilineTextAlignment(.trailing)
         }
     }
-    
+
     private func statusBadge(text: String, color: Color) -> some View {
         Text(text)
             .font(.caption.weight(.semibold))
@@ -346,7 +383,40 @@ struct MDMSnapshotView: View {
             .background(color.opacity(0.12), in: Capsule())
             .foregroundStyle(color)
     }
-    
+
+    private func statusIconTile(for status: MDMMetrics.EnrollmentStatus) -> some View {
+        let tint = statusColor(status)
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(tint.opacity(0.14))
+                .frame(width: 42, height: 42)
+
+            Image(systemName: statusIcon(status))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(tint)
+        }
+    }
+
+    private var cardBackground: some ShapeStyle {
+        Color(nsColor: .controlBackgroundColor)
+    }
+
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+    }
+
+    private func loadingOverlay(text: String) -> some View {
+        VStack(spacing: 8) {
+            ProgressView()
+
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func errorState(error: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
@@ -410,7 +480,22 @@ struct MDMSnapshotView: View {
         case .unknown: return localizer.text(.mdmStatusNeedsReview)
         }
     }
-    
+
+    private func statusCapsuleText(_ metrics: MDMMetrics) -> String {
+        switch metrics.enrollmentStatus {
+        case .enrolled:
+            return localizer.text(.commonYes)
+        case .depAssignedOnly:
+            return localizer.text(.mdmSnapshotAssigned)
+        case .historicalTracesOnly:
+            return localizer.text(.mdmSnapshotPresent)
+        case .notEnrolled:
+            return localizer.text(.commonNo)
+        case .unknown:
+            return localizer.text(.mdmStatusNeedsReview)
+        }
+    }
+
     private func statusDescription(_ metrics: MDMMetrics) -> String {
         if metrics.mdmEnrolled {
             return localizer.text(.mdmSnapshotActivelyManaged)
@@ -422,7 +507,27 @@ struct MDMSnapshotView: View {
             return localizer.text(.mdmSnapshotNoActivity)
         }
     }
-    
+
+    private func enrollmentInsight(_ metrics: MDMMetrics) -> String {
+        if metrics.mdmEnrolled {
+            return localizer.text(.mdmSnapshotActivelyManaged)
+        } else if metrics.enrolledViaDEP {
+            return localizer.text(.mdmSnapshotDEPConfigured)
+        } else {
+            return localizer.text(.mdmSnapshotNoActivity)
+        }
+    }
+
+    private func policyInsight(_ config: MDMMetrics.DEPConfiguration) -> String {
+        if config.isMandatory {
+            return localizer.text(.mdmSnapshotDEPConfigured)
+        } else if config.isSupervised {
+            return localizer.text(.mdmSnapshotActivelyManaged)
+        } else {
+            return localizer.text(.mdmSnapshotDEPAssignment)
+        }
+    }
+
     private func riskText(_ risk: MDMMetrics.ResetRisk) -> String {
         switch risk {
         case .high: return localizer.text(.mdmRiskLikelyYes)
