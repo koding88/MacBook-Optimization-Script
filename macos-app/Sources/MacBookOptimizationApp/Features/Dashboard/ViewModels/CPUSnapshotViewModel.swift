@@ -168,7 +168,6 @@ final class CPUSnapshotViewModel: ObservableObject {
 
         isPaused = true
         monitoringState = .paused
-        stopAdvancedMonitoring(resetState: true)
     }
 
     func resumeMonitoring() {

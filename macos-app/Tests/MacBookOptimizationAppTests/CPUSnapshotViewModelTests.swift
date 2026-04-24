@@ -170,7 +170,7 @@ final class CPUSnapshotViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.advancedState, .running)
     }
 
-    func testPauseMonitoringStopsAdvancedStreamAndKeepsLastAdvancedMetrics() async throws {
+    func testPauseAndResumeMonitoringPreservesAdvancedSessionWithoutRestartingAuthorization() async throws {
         let basicCollector = StubBasicCPUCollector(
             snapshots: [
                 BasicCPUMetrics(
@@ -204,13 +204,15 @@ final class CPUSnapshotViewModelTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         viewModel.pauseMonitoring()
+        viewModel.resumeMonitoring()
 
-        XCTAssertEqual(viewModel.monitoringState, .paused)
-        XCTAssertEqual(viewModel.advancedState, .idle)
+        XCTAssertEqual(viewModel.monitoringState, .running)
+        XCTAssertEqual(viewModel.advancedState, .running)
         XCTAssertEqual(viewModel.advancedMetrics?.power.cpu, 1200)
         XCTAssertEqual(viewModel.currentMetrics?.power.cpu, 1200)
         XCTAssertEqual(viewModel.metricsHistory.count, 1)
-        XCTAssertEqual(advancedService.stopCallCount, 1)
+        XCTAssertEqual(advancedService.startCallCount, 1)
+        XCTAssertEqual(advancedService.stopCallCount, 0)
     }
 
     func testAdvancedInsightsSummarizeDominantClusterCoreAndPower() async throws {
