@@ -4,7 +4,9 @@ import SwiftUI
 struct MemorySnapshotView: View {
     @ObservedObject var viewModel: MemorySnapshotViewModel
     @EnvironmentObject private var dashboardModel: OptimizationDashboardViewModel
-    
+    @State private var previousMetrics: MemoryMetrics?
+    @State private var changedFields: Set<MemorySnapshotPresentation.ChangedField> = []
+
     private let cardCornerRadius: CGFloat = 12
     private let miniCardCornerRadius: CGFloat = 10
     private let pressureChartHeight: CGFloat = 168
@@ -31,6 +33,10 @@ struct MemorySnapshotView: View {
         pressureAccentColor(for: displayMetrics.pressureLevel)
     }
 
+    private var headerPalette: MemorySnapshotPresentation.HeaderPalette {
+        MemorySnapshotPresentation.headerPalette(for: displayMetrics)
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
@@ -40,7 +46,6 @@ struct MemorySnapshotView: View {
                     errorState(error: error)
                 } else {
                     adaptiveOverview(metrics: displayMetrics)
-                    usageBreakdown(metrics: displayMetrics)
                 }
             }
             .padding()
@@ -57,22 +62,54 @@ struct MemorySnapshotView: View {
                 viewModel.pauseMonitoring()
             }
         }
+        .onChange(of: viewModel.currentMetrics) { metrics in
+            guard let metrics else { return }
+
+            let updatedFields = MemorySnapshotPresentation.changedFields(from: previousMetrics, to: metrics)
+            previousMetrics = metrics
+
+            withAnimation(.easeInOut(duration: 0.24)) {
+                changedFields = updatedFields
+            }
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(900))
+                withAnimation(.easeOut(duration: 0.45)) {
+                    changedFields.subtract(updatedFields)
+                }
+            }
+        }
     }
 
     private var headerSection: some View {
         HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(localizer.text(.memorySnapshotTitle))
-                    .font(.title2.weight(.semibold))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(headerAccentColor.opacity(0.18))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: headerPalette.iconSymbol)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(headerAccentColor)
+                    }
 
-                HStack(spacing: 8) {
-                    Text(headerUsageText)
-                    Text("•")
-                    Text(headerPressureText)
-                        .foregroundStyle(viewModel.currentMetrics == nil ? .secondary : pressureColor(displayMetrics.pressureLevel))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(localizer.text(.memorySnapshotTitle))
+                            .font(.title2.weight(.semibold))
+
+                        HStack(spacing: 8) {
+                            Text(headerUsageText)
+                                .modifier(ValuePulseModifier(isActive: changedFields.contains(.usage)))
+                            Text("•")
+                            Text(headerPressureText)
+                                .foregroundStyle(viewModel.currentMetrics == nil ? .secondary : pressureColor(displayMetrics.pressureLevel))
+                                .modifier(ValuePulseModifier(isActive: changedFields.contains(.pressure)))
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    }
                 }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 16)
@@ -101,23 +138,18 @@ struct MemorySnapshotView: View {
                 headerStatusBadge
             }
         }
-        .padding()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .background(cardBackground)
+        .overlay(cardBorder)
         .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
     }
 
     @ViewBuilder
     private func adaptiveOverview(metrics: MemoryMetrics) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 16) {
-                pressureCard(metrics: metrics)
-                detailsCard(metrics: metrics)
-            }
-
-            VStack(spacing: 16) {
-                pressureCard(metrics: metrics)
-                detailsCard(metrics: metrics)
-            }
+        VStack(spacing: 16) {
+            pressureCard(metrics: metrics)
+            detailsCard(metrics: metrics)
         }
     }
 
@@ -125,12 +157,23 @@ struct MemorySnapshotView: View {
         sectionCard {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(localizer.text(.memorySnapshotPressure))
-                            .font(.headline)
-                        Text(pressureHint(metrics))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: 10) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(currentPressureAccent.opacity(0.16))
+                                .frame(width: 38, height: 38)
+                            Image(systemName: pressureIconName(metrics.pressureLevel))
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(currentPressureAccent)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(localizer.text(.memorySnapshotPressure))
+                                .font(.headline)
+                            Text(pressureHint(metrics))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Spacer()
@@ -154,19 +197,25 @@ struct MemorySnapshotView: View {
                         title: localizer.text(.memorySnapshotMemoryUsed),
                         value: memoryValueText(metrics.usedBytes),
                         accent: .primary,
-                        tint: .blue
+                        tint: .blue,
+                        icon: "memorychip.fill",
+                        highlight: changedFields.contains(.usage)
                     )
                     quickStatCard(
                         title: localizer.text(.memorySnapshotCachedFiles),
                         value: memoryValueText(metrics.cachedBytes),
                         accent: .primary,
-                        tint: cachedMemoryColor
+                        tint: cachedMemoryColor,
+                        icon: "externaldrive.fill",
+                        highlight: changedFields.contains(.usage)
                     )
                     quickStatCard(
                         title: localizer.text(.memorySnapshotSwapUsed),
                         value: memoryValueText(metrics.swapUsedBytes),
                         accent: metrics.swapUsedBytes > 0 ? .primary : .secondary,
-                        tint: metrics.swapUsedBytes > 0 ? pressureAccentColor(for: metrics.pressureLevel) : .secondary
+                        tint: metrics.swapUsedBytes > 0 ? pressureAccentColor(for: metrics.pressureLevel) : .secondary,
+                        icon: "arrow.triangle.2.circlepath.circle.fill",
+                        highlight: changedFields.contains(.swap)
                     )
                 }
             }
@@ -175,64 +224,51 @@ struct MemorySnapshotView: View {
     }
 
     private func detailsCard(metrics: MemoryMetrics) -> some View {
-        sectionCard {
+        let breakdownItems = MemorySnapshotPresentation.usageBreakdownItems(for: metrics)
+        let breakdownSpacing: CGFloat = 3
+
+        return sectionCard {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader(
                     title: localizer.text(.memorySnapshotUsageBreakdown),
-                    subtitle: localizer.text(.memorySnapshotPhysicalMemory)
+                    subtitle: breakdownSubtitle(metrics)
                 )
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 10) {
-                        detailSection(
-                            title: localizer.text(.memorySnapshotSectionCapacity),
-                            rows: [
-                                (localizer.text(.memorySnapshotPhysicalMemory), memoryValueText(metrics.totalBytes)),
-                                (localizer.text(.memorySnapshotFreeMemory), memoryValueText(metrics.freeBytes))
-                            ]
+                metricSummaryRow(metrics: metrics)
+
+                VStack(spacing: 8) {
+                    GeometryReader { geometry in
+                        let segmentWidths = MemorySnapshotPresentation.usageBreakdownSegmentWidths(
+                            values: breakdownItems.map(\.valueBytes),
+                            totalWidth: geometry.size.width,
+                            spacing: breakdownSpacing
                         )
-                        detailSection(
-                            title: localizer.text(.memorySnapshotSectionUsage),
-                            rows: [
-                                (localizer.text(.memorySnapshotMemoryUsed), memoryValueText(metrics.usedBytes)),
-                                (localizer.text(.memorySnapshotCachedFiles), memoryValueText(metrics.cachedBytes)),
-                                (localizer.text(.memorySnapshotSwapUsed), memoryValueText(metrics.swapUsedBytes))
-                            ]
+
+                        HStack(spacing: breakdownSpacing) {
+                            ForEach(Array(breakdownItems.enumerated()), id: \.offset) { index, item in
+                                usageSegment(
+                                    color: breakdownColor(for: item.titleKey),
+                                    width: segmentWidths[index]
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                                .fill(Color.primary.opacity(0.025))
                         )
-                        detailSection(
-                            title: localizer.text(.memorySnapshotSectionSystem),
-                            rows: [
-                                (localizer.text(.memorySnapshotAppMemory), memoryValueText(metrics.appBytes)),
-                                (localizer.text(.memorySnapshotWiredMemory), memoryValueText(metrics.wiredBytes)),
-                                (localizer.text(.memorySnapshotCompressed), memoryValueText(metrics.compressedBytes))
-                            ]
+                        .overlay(
+                            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
                         )
                     }
+                    .frame(height: 18)
+                }
 
-                    VStack(spacing: 10) {
-                        detailSection(
-                            title: localizer.text(.memorySnapshotSectionCapacity),
-                            rows: [
-                                (localizer.text(.memorySnapshotPhysicalMemory), memoryValueText(metrics.totalBytes)),
-                                (localizer.text(.memorySnapshotFreeMemory), memoryValueText(metrics.freeBytes))
-                            ]
-                        )
-                        detailSection(
-                            title: localizer.text(.memorySnapshotSectionUsage),
-                            rows: [
-                                (localizer.text(.memorySnapshotMemoryUsed), memoryValueText(metrics.usedBytes)),
-                                (localizer.text(.memorySnapshotCachedFiles), memoryValueText(metrics.cachedBytes)),
-                                (localizer.text(.memorySnapshotSwapUsed), memoryValueText(metrics.swapUsedBytes))
-                            ]
-                        )
-                        detailSection(
-                            title: localizer.text(.memorySnapshotSectionSystem),
-                            rows: [
-                                (localizer.text(.memorySnapshotAppMemory), memoryValueText(metrics.appBytes)),
-                                (localizer.text(.memorySnapshotWiredMemory), memoryValueText(metrics.wiredBytes)),
-                                (localizer.text(.memorySnapshotCompressed), memoryValueText(metrics.compressedBytes))
-                            ]
-                        )
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(Array(breakdownItems.enumerated()), id: \.offset) { _, item in
+                        breakdownLegendCard(item)
                     }
                 }
             }
@@ -309,38 +345,6 @@ struct MemorySnapshotView: View {
         .animation(.easeInOut(duration: 0.22), value: points)
     }
 
-    private func usageBreakdown(metrics: MemoryMetrics) -> some View {
-        sectionCard {
-            VStack(alignment: .leading, spacing: 10) {
-                sectionHeader(
-                    title: localizer.text(.memorySnapshotUsageBreakdown),
-                    subtitle: breakdownSubtitle(metrics)
-                )
-
-                GeometryReader { geometry in
-                    HStack(spacing: 2) {
-                        usageSegment(color: .blue, width: geometry.size.width * metrics.usedRatio * (metrics.appBytes > 0 ? Double(metrics.appBytes) / Double(max(metrics.usedBytes, 1)) : 0))
-                        usageSegment(color: .orange, width: geometry.size.width * metrics.usedRatio * (metrics.wiredBytes > 0 ? Double(metrics.wiredBytes) / Double(max(metrics.usedBytes, 1)) : 0))
-                        usageSegment(color: .purple, width: geometry.size.width * metrics.usedRatio * (metrics.compressedBytes > 0 ? Double(metrics.compressedBytes) / Double(max(metrics.usedBytes, 1)) : 0))
-                        usageSegment(color: cachedMemoryColor, width: geometry.size.width * metrics.cachedRatio)
-                        usageSegment(color: .gray.opacity(0.22), width: geometry.size.width * metrics.freeRatio)
-                    }
-                    .padding(3)
-                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .frame(height: 20)
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                    legendRow(color: .blue, title: localizer.text(.memorySnapshotAppMemory), value: memoryValueText(metrics.appBytes))
-                    legendRow(color: .orange, title: localizer.text(.memorySnapshotWiredMemory), value: memoryValueText(metrics.wiredBytes))
-                    legendRow(color: .purple, title: localizer.text(.memorySnapshotCompressed), value: memoryValueText(metrics.compressedBytes))
-                    legendRow(color: cachedMemoryColor, title: localizer.text(.memorySnapshotCachedFiles), value: memoryValueText(metrics.cachedBytes))
-                    legendRow(color: .gray, title: localizer.text(.memorySnapshotFreeMemory), value: memoryValueText(metrics.freeBytes))
-                }
-            }
-        }
-    }
-
     private func metricRow(_ title: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
@@ -353,29 +357,122 @@ struct MemorySnapshotView: View {
         }
     }
 
-    private func quickStatCard(title: String, value: String, accent: Color, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+    private func quickStatCard(title: String, value: String, accent: Color, tint: Color, icon: String, highlight: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 24, height: 24)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Text(value)
                 .font(.system(size: 20, weight: .semibold, design: .rounded))
                 .foregroundStyle(accent)
+                .modifier(ValuePulseModifier(isActive: highlight))
+
             Capsule()
-                .fill(tint.opacity(0.22))
-                .frame(width: 26, height: 3)
+                .fill(tint.opacity(0.3))
+                .frame(width: 30, height: 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .background(innerCardBackground, in: RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                .stroke(highlight ? tint.opacity(0.2) : Color.primary.opacity(0.05), lineWidth: 1)
+        )
         .animation(.easeInOut(duration: 0.2), value: value)
     }
 
     private func usageSegment(color: Color, width: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(color)
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(color.opacity(0.88))
             .frame(width: max(width, 0))
+    }
+
+    private func metricSummaryRow(metrics: MemoryMetrics) -> some View {
+        HStack(spacing: 12) {
+            compactMetricPill(
+                title: localizer.text(.memorySnapshotPhysicalMemory),
+                value: memoryValueText(metrics.totalBytes),
+                icon: "circle.grid.2x2.fill",
+                tint: .blue
+            )
+            compactMetricPill(
+                title: localizer.text(.memorySnapshotMemoryUsed),
+                value: memoryValueText(metrics.usedBytes),
+                icon: "memorychip.fill",
+                tint: currentPressureAccent
+            )
+            compactMetricPill(
+                title: localizer.text(.memorySnapshotSwapUsed),
+                value: memoryValueText(metrics.swapUsedBytes),
+                icon: "arrow.triangle.2.circlepath.circle.fill",
+                tint: metrics.swapUsedBytes > 0 ? .orange : .secondary
+            )
+        }
+    }
+
+    private func compactMetricPill(title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(innerCardBackground, in: RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                .stroke(tint.opacity(0.14), lineWidth: 1)
+        )
+    }
+
+    private func breakdownLegendCard(_ item: MemorySnapshotPresentation.UsageBreakdownItem) -> some View {
+        let color = breakdownColor(for: item.titleKey)
+
+        return HStack(spacing: 10) {
+            Image(systemName: item.iconSymbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 26, height: 26)
+                .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(localizer.text(item.titleKey))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(memoryValueText(item.valueBytes))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(innerCardBackground, in: RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                .stroke(color.opacity(0.14), lineWidth: 1)
+        )
     }
 
     private func legendRow(color: Color, title: String, value: String) -> some View {
@@ -472,6 +569,23 @@ struct MemorySnapshotView: View {
         Color(red: 0.2, green: 0.58, blue: 0.82)
     }
 
+    private func breakdownColor(for key: LocalizedKey) -> Color {
+        switch key {
+        case .memorySnapshotAppMemory:
+            return .blue
+        case .memorySnapshotWiredMemory:
+            return .orange
+        case .memorySnapshotCompressed:
+            return .purple
+        case .memorySnapshotCachedFiles:
+            return cachedMemoryColor
+        case .memorySnapshotFreeMemory:
+            return .gray
+        default:
+            return .secondary
+        }
+    }
+
     private func pressureHint(_ metrics: MemoryMetrics) -> String {
         switch metrics.pressureLevel {
         case .normal:
@@ -494,6 +608,8 @@ struct MemorySnapshotView: View {
         .padding(.vertical, 6)
         .background(pressureAccentColor(for: level).opacity(0.12), in: Capsule())
         .foregroundStyle(pressureAccentColor(for: level))
+        .scaleEffect(changedFields.contains(.pressure) ? 1.03 : 1.0)
+        .animation(.easeOut(duration: 0.35), value: changedFields.contains(.pressure))
     }
 
     private func pressureIconName(_ level: MemoryMetrics.PressureLevel) -> String {
@@ -538,6 +654,7 @@ struct MemorySnapshotView: View {
         content()
             .padding()
             .background(cardBackground)
+            .overlay(cardBorder)
             .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
     }
 
@@ -560,6 +677,17 @@ struct MemorySnapshotView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(Color.primary.opacity(0.055), in: Capsule())
+    }
+
+    private var headerAccentColor: Color {
+        switch headerPalette.emphasis {
+        case .normal:
+            return Color(red: 0.17, green: 0.48, blue: 0.95)
+        case .warning:
+            return .orange
+        case .critical:
+            return .red
+        }
     }
 
     private var pressureZoneLegend: some View {
@@ -605,6 +733,11 @@ struct MemorySnapshotView: View {
 
     private var innerCardBackground: Color {
         Color(nsColor: .windowBackgroundColor)
+    }
+
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
     }
 
     private func pressureChartDomain(for points: [PressureChartPoint]) -> ClosedRange<Date> {
@@ -760,27 +893,34 @@ struct MemorySnapshotView: View {
     private var headerStatusBadge: some View {
         Group {
             if viewModel.currentMetrics == nil {
-                statusBadge(localizer.text(.memorySnapshotLoading))
+                statusBadge(localizer.text(.memorySnapshotLoading), systemImage: "clock")
             } else if viewModel.monitoringState == .paused {
-                statusBadge(localizer.text(.commonPaused))
+                statusBadge(localizer.text(.commonPaused), systemImage: "pause.fill")
             } else {
-                statusBadge(localizer.text(.commonLive))
+                statusBadge(localizer.text(.commonLive), systemImage: headerPalette.statusSymbol)
             }
         }
     }
 
-    private func statusBadge(_ title: String) -> some View {
-        Text(title)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(.secondary)
+    private func statusBadge(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(viewModel.monitoringState == .paused ? .secondary : headerAccentColor)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color.primary.opacity(0.055), in: Capsule())
+            .background((viewModel.monitoringState == .paused ? Color.primary.opacity(0.055) : headerAccentColor.opacity(0.12)), in: Capsule())
+            .scaleEffect(changedFields.contains(.pressure) ? 1.02 : 1.0)
+            .animation(.easeOut(duration: 0.35), value: changedFields.contains(.pressure))
     }
 
     private func memoryValueText(_ bytes: Int64) -> String {
         guard viewModel.currentMetrics != nil else { return "—" }
         return MemoryMetrics.format(bytes: bytes)
+    }
+
+    private func ratio(for bytes: Int64, totalBytes: Int64) -> CGFloat {
+        guard totalBytes > 0 else { return 0 }
+        return CGFloat(min(max(Double(bytes) / Double(totalBytes), 0), 1))
     }
 
     private func breakdownSubtitle(_ metrics: MemoryMetrics) -> String {
@@ -789,6 +929,17 @@ struct MemorySnapshotView: View {
         }
 
         return localizer.format(.memorySnapshotUsageFootprint, MemoryMetrics.format(bytes: metrics.usedBytes))
+    }
+}
+
+private struct ValuePulseModifier: ViewModifier {
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isActive ? 1.03 : 1.0)
+            .opacity(isActive ? 0.9 : 1.0)
+            .animation(.easeOut(duration: 0.35), value: isActive)
     }
 }
 
