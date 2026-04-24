@@ -147,8 +147,12 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     deinit {
         refreshTask?.cancel()
-        // Note: Monitoring services will cleanup automatically when their tasks are cancelled
-        // No need to explicitly stop them here due to MainActor isolation
+    }
+
+    func stopAllMonitoring() {
+        cpuSnapshotViewModel?.stopMonitoring()
+        memorySnapshotViewModel?.stopMonitoring()
+        batterySnapshotViewModel?.stopMonitoring()
     }
 
     var selectedCategory: ActionCategory {

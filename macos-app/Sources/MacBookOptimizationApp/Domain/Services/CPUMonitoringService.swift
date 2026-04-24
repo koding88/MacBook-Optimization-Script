@@ -24,12 +24,8 @@ final class CPUMonitoringService: CPUMonitoringServiceProtocol {
         AdvancedCPUMonitoringService.monitoringShellCommand(
             outputFilePath: outputFilePath,
             stopFilePath: stopFilePath,
-            sampleIntervalMilliseconds: sampleIntervalMilliseconds,
-            sampleDelimiter: sampleDelimiter
+            pidFilePath: "/tmp/mbo-powermetrics.pid",
+            sampleIntervalMilliseconds: sampleIntervalMilliseconds
         )
-    }
-
-    static func lastCompleteSample(in output: String, delimiter: String = "\n__MBO_SAMPLE_END__\n") -> String? {
-        AdvancedCPUMonitoringService.lastCompleteSample(in: output, delimiter: delimiter)
     }
 }

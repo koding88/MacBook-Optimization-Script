@@ -2,6 +2,69 @@ import XCTest
 @testable import MacBookOptimizationApp
 
 final class CPUMetricsParserTests: XCTestCase {
+    private let samplePlistData = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>processor</key>
+        <dict>
+            <key>cpu_power</key>
+            <real>3811.02</real>
+            <key>gpu_power</key>
+            <real>64.5056</real>
+            <key>ane_power</key>
+            <real>0</real>
+            <key>clusters</key>
+            <array>
+                <dict>
+                    <key>name</key>
+                    <string>E-Cluster</string>
+                    <key>freq_hz</key>
+                    <real>1296410000</real>
+                    <key>online_ratio</key>
+                    <real>1.0</real>
+                    <key>idle_ratio</key>
+                    <real>0.327863</real>
+                    <key>down_ratio</key>
+                    <real>0.0</real>
+                    <key>dvfm_states</key>
+                    <array>
+                        <dict>
+                            <key>freq</key>
+                            <integer>912</integer>
+                            <key>used_ratio</key>
+                            <real>0.444261</real>
+                        </dict>
+                        <dict>
+                            <key>freq</key>
+                            <integer>1284</integer>
+                            <key>used_ratio</key>
+                            <real>0.0419188</real>
+                        </dict>
+                    </array>
+                    <key>cpus</key>
+                    <array>
+                        <dict>
+                            <key>cpu</key>
+                            <integer>0</integer>
+                            <key>freq_hz</key>
+                            <real>1419910000</real>
+                            <key>idle_ratio</key>
+                            <real>0.715993</real>
+                            <key>down_ratio</key>
+                            <real>0.0</real>
+                        </dict>
+                    </array>
+                </dict>
+            </array>
+        </dict>
+        <key>thermal_pressure</key>
+        <string>Nominal</string>
+    </dict>
+    </plist>
+    """.data(using: .utf8)!
+
     func testOverallCPUUsageReturnsZeroWhenNoCoresExist() {
         let metrics = CPUMetrics(
             timestamp: Date(timeIntervalSince1970: 1_700_000_000),
@@ -40,5 +103,22 @@ final class CPUMetricsParserTests: XCTestCase {
             .init(frequency: 744, percentage: 18.5),
             .init(frequency: 972, percentage: 68.5)
         ])
+    }
+
+    func testParsePlistBuildsMetricsFromMachineReadableSample() {
+        let metrics = CPUMetricsParser.parse(plistData: samplePlistData, cpuName: "Apple M4")
+
+        XCTAssertEqual(metrics?.thermalPressure, .nominal)
+        XCTAssertEqual(metrics?.power.cpu, 3811)
+        XCTAssertEqual(metrics?.power.gpu, 65)
+        XCTAssertEqual(metrics?.power.ane, 0)
+        XCTAssertEqual(metrics?.clusters.first?.name, "E-Cluster")
+        XCTAssertEqual(metrics?.clusters.first?.frequencyDistribution.count, 2)
+        XCTAssertEqual(metrics?.clusters.first?.frequencyDistribution.first?.frequency, 912)
+        XCTAssertEqual(metrics?.clusters.first?.frequencyDistribution.first?.percentage ?? 0, 44.4261, accuracy: 0.0001)
+        XCTAssertEqual(metrics?.clusters.first?.frequencyDistribution.last?.frequency, 1284)
+        XCTAssertEqual(metrics?.clusters.first?.frequencyDistribution.last?.percentage ?? 0, 4.19188, accuracy: 0.0001)
+        XCTAssertEqual(metrics?.cores.first?.id, 0)
+        XCTAssertEqual(metrics?.cores.first?.frequency, 1420)
     }
 }

@@ -16,7 +16,20 @@ struct CPUMetrics: Equatable {
         case trapping = "Trapping"
         case sleeping = "Sleeping"
         
-        var displayName: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .nominal:
+                return "Nominal"
+            case .moderate:
+                return "Moderate"
+            case .heavy:
+                return "Heavy"
+            case .trapping:
+                return "Trapping"
+            case .sleeping:
+                return "Sleeping"
+            }
+        }
     }
     
     struct ClusterMetrics: Equatable, Identifiable {
@@ -82,6 +95,29 @@ struct CPUMetricsParser {
             power: power
         )
     }
+
+    static func parse(plistData: Data, cpuName: String) -> CPUMetrics? {
+        guard let plist = try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil),
+              let root = plist as? [String: Any],
+              let thermalPressure = parseThermalPressure(from: root),
+              let processor = root["processor"] as? [String: Any],
+              let power = parsePower(from: processor) else {
+            return nil
+        }
+
+        let clusters = parseClusters(from: processor)
+        let cores = clusters.flatMap(\.cpus)
+
+        return CPUMetrics(
+            timestamp: .now,
+            cpuName: cpuName,
+            totalCores: cores.count,
+            thermalPressure: thermalPressure,
+            clusters: clusters.map(\.cluster),
+            cores: cores,
+            power: power
+        )
+    }
     
     private static func parseThermalPressure(from lines: [String]) -> CPUMetrics.ThermalPressure? {
         guard let line = lines.first(where: { $0.contains("Current pressure level:") }) else {
@@ -92,6 +128,13 @@ struct CPUMetricsParser {
         guard components.count >= 2 else { return nil }
         
         let level = components[1].trimmingCharacters(in: .whitespaces)
+        return CPUMetrics.ThermalPressure(rawValue: level)
+    }
+
+    private static func parseThermalPressure(from plist: [String: Any]) -> CPUMetrics.ThermalPressure? {
+        guard let level = plist["thermal_pressure"] as? String else {
+            return nil
+        }
         return CPUMetrics.ThermalPressure(rawValue: level)
     }
     
@@ -116,6 +159,20 @@ struct CPUMetricsParser {
         
         return CPUMetrics.PowerMetrics(cpu: cpuPower, gpu: gpuPower, ane: anePower)
     }
+
+    private static func parsePower(from processor: [String: Any]) -> CPUMetrics.PowerMetrics? {
+        guard let cpu = numberValue(processor["cpu_power"]),
+              let gpu = numberValue(processor["gpu_power"]),
+              let ane = numberValue(processor["ane_power"]) else {
+            return nil
+        }
+
+        return CPUMetrics.PowerMetrics(
+            cpu: Int(cpu.rounded()),
+            gpu: Int(gpu.rounded()),
+            ane: Int(ane.rounded())
+        )
+    }
     
     private static func extractMilliwatts(from line: String) -> Int? {
         let components = line.components(separatedBy: " ")
@@ -138,6 +195,39 @@ struct CPUMetricsParser {
         }
         
         return clusters
+    }
+
+    private static func parseClusters(from processor: [String: Any]) -> [(cluster: CPUMetrics.ClusterMetrics, cpus: [CPUMetrics.CoreMetrics])] {
+        guard let clusterObjects = processor["clusters"] as? [[String: Any]] else {
+            return []
+        }
+
+        return clusterObjects.compactMap { clusterObject in
+            guard let name = clusterObject["name"] as? String,
+                  let onlineRatio = numberValue(clusterObject["online_ratio"]),
+                  let frequencyHz = numberValue(clusterObject["freq_hz"]),
+                  let idleRatio = numberValue(clusterObject["idle_ratio"]),
+                  let downRatio = numberValue(clusterObject["down_ratio"]) else {
+                return nil
+            }
+
+            let activeResidency = max(0, 100 - (idleRatio * 100) - (downRatio * 100))
+            let frequencyDistribution = parseDVFMStates(from: clusterObject["dvfm_states"])
+            let cpus = parseCPUs(from: clusterObject["cpus"])
+
+            let cluster = CPUMetrics.ClusterMetrics(
+                id: name,
+                name: name,
+                online: onlineRatio * 100,
+                activeFrequency: Int((frequencyHz / 1_000_000).rounded()),
+                activeResidency: activeResidency,
+                idleResidency: idleRatio * 100,
+                downResidency: downRatio * 100,
+                frequencyDistribution: frequencyDistribution
+            )
+
+            return (cluster, cpus)
+        }
     }
     
     private static func parseCluster(name: String, from lines: [String]) -> CPUMetrics.ClusterMetrics? {
@@ -228,6 +318,61 @@ struct CPUMetricsParser {
         }
         
         return cores
+    }
+
+    private static func parseCPUs(from value: Any?) -> [CPUMetrics.CoreMetrics] {
+        guard let cpuObjects = value as? [[String: Any]] else {
+            return []
+        }
+
+        return cpuObjects.compactMap { cpuObject in
+            guard let cpuID = cpuObject["cpu"] as? Int,
+                  let frequencyHz = numberValue(cpuObject["freq_hz"]),
+                  let idleRatio = numberValue(cpuObject["idle_ratio"]),
+                  let downRatio = numberValue(cpuObject["down_ratio"]) else {
+                return nil
+            }
+
+            return CPUMetrics.CoreMetrics(
+                id: cpuID,
+                frequency: Int((frequencyHz / 1_000_000).rounded()),
+                activeResidency: max(0, 100 - (idleRatio * 100) - (downRatio * 100)),
+                idleResidency: idleRatio * 100,
+                downResidency: downRatio * 100
+            )
+        }
+    }
+
+    private static func parseDVFMStates(from value: Any?) -> [CPUMetrics.ClusterMetrics.FrequencyBucket] {
+        guard let states = value as? [[String: Any]] else {
+            return []
+        }
+
+        return states.compactMap { state in
+            guard let frequency = state["freq"] as? Int,
+                  let usedRatio = numberValue(state["used_ratio"]) else {
+                return nil
+            }
+
+            return CPUMetrics.ClusterMetrics.FrequencyBucket(
+                frequency: frequency,
+                percentage: usedRatio * 100
+            )
+        }
+        .sorted { $0.frequency < $1.frequency }
+    }
+
+    private static func numberValue(_ value: Any?) -> Double? {
+        switch value {
+        case let number as NSNumber:
+            return number.doubleValue
+        case let double as Double:
+            return double
+        case let int as Int:
+            return Double(int)
+        default:
+            return nil
+        }
     }
     
     private static func parseCore(id: Int, from lines: [String]) -> CPUMetrics.CoreMetrics? {

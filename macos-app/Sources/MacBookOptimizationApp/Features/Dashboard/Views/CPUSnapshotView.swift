@@ -862,7 +862,7 @@ struct CPUSnapshotView: View {
     }
 
     private func displayThermalState(_ metrics: BasicCPUMetrics) -> String {
-        viewModel.basicMetrics == nil ? "—" : metrics.thermalState.displayName
+        viewModel.basicMetrics == nil ? "—" : localizedThermalText(metrics.thermalState)
     }
 
     private func coreCountValue(_ totalCores: Int) -> String {
@@ -936,14 +936,79 @@ struct CPUSnapshotView: View {
 
     private func displayAdvancedInsights(_ metrics: CPUMetrics) -> [CPUSnapshotViewModel.AdvancedInsight] {
         if viewModel.advancedMetrics != nil {
-            return viewModel.advancedInsights
+            return viewModel.advancedInsights.map(localizedInsight)
         }
 
         return [
-            .init(title: "Most active cluster", value: "0%", detail: "—"),
-            .init(title: "Peak core", value: "0.00 GHz", detail: "—"),
-            .init(title: "Power draw", value: "0.00 W", detail: "—")
+            .init(title: localizer.text(.cpuSnapshotAdvancedInsightMostActiveCluster), value: "0%", detail: "—"),
+            .init(title: localizer.text(.cpuSnapshotAdvancedInsightPeakCore), value: "0.00 GHz", detail: "—"),
+            .init(title: localizer.text(.cpuSnapshotAdvancedInsightPowerDraw), value: "0.00 W", detail: "—")
         ]
+    }
+
+    private func localizedThermalText(_ pressure: CPUMetrics.ThermalPressure) -> String {
+        switch pressure {
+        case .nominal:
+            return localizer.text(.cpuSnapshotThermalNominal)
+        case .moderate:
+            return localizer.text(.cpuSnapshotThermalModerate)
+        case .heavy:
+            return localizer.text(.cpuSnapshotThermalHeavy)
+        case .trapping:
+            return localizer.text(.cpuSnapshotThermalTrapping)
+        case .sleeping:
+            return localizer.text(.cpuSnapshotThermalSleeping)
+        }
+    }
+
+    private func localizedInsight(_ insight: CPUSnapshotViewModel.AdvancedInsight) -> CPUSnapshotViewModel.AdvancedInsight {
+        switch insight.title {
+        case "Most Active Cluster":
+            return .init(
+                title: localizer.text(.cpuSnapshotAdvancedInsightMostActiveCluster),
+                value: insight.value,
+                detail: localizedInsightDetail(insight.detail)
+            )
+        case "Peak Core":
+            return .init(
+                title: localizer.text(.cpuSnapshotAdvancedInsightPeakCore),
+                value: insight.value,
+                detail: localizedInsightDetail(insight.detail)
+            )
+        case "Power Draw":
+            return .init(
+                title: localizer.text(.cpuSnapshotAdvancedInsightPowerDraw),
+                value: insight.value,
+                detail: localizedInsightDetail(insight.detail)
+            )
+        default:
+            return .init(title: insight.title, value: insight.value, detail: localizedInsightDetail(insight.detail))
+        }
+    }
+
+    private func localizedInsightDetail(_ detail: String) -> String {
+        if detail.hasSuffix("carries current load") {
+            let cluster = detail.replacingOccurrences(of: " carries current load", with: "")
+            return localizer.format(.cpuSnapshotAdvancedInsightClusterCarriesLoad, cluster)
+        }
+
+        if detail.hasPrefix("CPU "), detail.hasSuffix(" is highest right now") {
+            let core = detail
+                .replacingOccurrences(of: "CPU ", with: "")
+                .replacingOccurrences(of: " is highest right now", with: "")
+            return localizer.format(.cpuSnapshotAdvancedInsightPeakCoreDetail, core)
+        }
+
+        switch detail {
+        case "CPU dominates package usage":
+            return localizer.text(.cpuSnapshotAdvancedInsightCpuDominates)
+        case "GPU dominates package usage":
+            return localizer.text(.cpuSnapshotAdvancedInsightGpuDominates)
+        case "ANE dominates package usage":
+            return localizer.text(.cpuSnapshotAdvancedInsightAneDominates)
+        default:
+            return detail
+        }
     }
 
     private func displayCores(_ metrics: CPUMetrics) -> [CPUMetrics.CoreMetrics] {

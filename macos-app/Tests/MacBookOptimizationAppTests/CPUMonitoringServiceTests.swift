@@ -64,30 +64,28 @@ final class CPUMonitoringServiceTests: XCTestCase {
         let command = AdvancedCPUMonitoringService.monitoringShellCommand(
             outputFilePath: "/tmp/output.log",
             stopFilePath: "/tmp/stop.flag",
+            pidFilePath: "/tmp/powermetrics.pid",
             sampleIntervalMilliseconds: 5_000
         )
 
-        XCTAssertTrue(command.contains("-i \"$2\""))
-        XCTAssertTrue(command.contains("sh \"$stop_file\" 5000"))
+        XCTAssertTrue(command.contains("\"$2\""))
         XCTAssertFalse(command.contains(" -i 1000 "))
+        XCTAssertFalse(command.contains(" -n 1"))
         XCTAssertFalse(command.contains("nohup"))
-        XCTAssertTrue(command.contains("</dev/null & printf 'started\\n'"))
+        XCTAssertTrue(command.contains("/bin/sh -c"))
+        XCTAssertTrue(command.contains("--format plist"))
+        XCTAssertTrue(command.contains("pid_file="))
+        XCTAssertTrue(command.contains("cat \"$pid_file\""))
+        XCTAssertTrue(command.contains("kill -TERM"))
+        XCTAssertTrue(command.contains("printf \"%s\" \"$$\" > \"$1\""))
+        XCTAssertTrue(command.contains("exec /usr/bin/powermetrics"))
+        XCTAssertTrue(command.contains("sh \"$pid_file\" \"$interval_ms\""))
+        XCTAssertTrue(command.contains(">/dev/null 2>&1 &"))
     }
 
-    func testLastCompleteSampleReturnsMostRecentFinishedBlock() {
-        let output = """
-        first line
-        __MBO_SAMPLE_END__
-        second line
-        __MBO_SAMPLE_END__
-        partial
-        """
-
-        let sample = AdvancedCPUMonitoringService.lastCompleteSample(
-            in: output,
-            delimiter: "\n__MBO_SAMPLE_END__\n"
-        )
-
-        XCTAssertEqual(sample, "second line")
+    func testProcessExistsCheckTreatsEPermAsAlive() {
+        XCTAssertTrue(AdvancedCPUMonitoringService.processExistsCheckSucceeded(result: -1, errnoValue: EPERM))
+        XCTAssertTrue(AdvancedCPUMonitoringService.processExistsCheckSucceeded(result: 0, errnoValue: 0))
+        XCTAssertFalse(AdvancedCPUMonitoringService.processExistsCheckSucceeded(result: -1, errnoValue: ESRCH))
     }
 }

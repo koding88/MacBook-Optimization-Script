@@ -94,6 +94,33 @@ final class CPUSnapshotViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.advancedState, .running)
     }
 
+    func testStartAdvancedMonitoringDoesNotSpawnDuplicateWorkerWhileRunning() async throws {
+        let advancedMetrics = CPUMetrics(
+            timestamp: Date(timeIntervalSince1970: 1_700_000_005),
+            cpuName: "Apple M3 Pro",
+            totalCores: 12,
+            thermalPressure: .heavy,
+            clusters: [],
+            cores: [],
+            power: .init(cpu: 1200, gpu: 350, ane: 40)
+        )
+        let advancedService = MockAdvancedCPUMonitoringService()
+        advancedService.prepareOpenEndedStream(yielding: [advancedMetrics])
+        let viewModel = CPUSnapshotViewModel(
+            basicCollector: StubBasicCPUCollector.singleSnapshot(),
+            advancedMonitoringService: advancedService
+        )
+
+        viewModel.startAdvancedMonitoring()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        viewModel.startAdvancedMonitoring()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(advancedService.startCallCount, 1)
+        XCTAssertEqual(advancedService.stopCallCount, 0)
+        XCTAssertEqual(viewModel.advancedState, .running)
+    }
+
     func testAdvancedAuthorizationCancellationKeepsBasicMetricsAndMarksAdvancedDenied() async throws {
         let basicCollector = StubBasicCPUCollector(
             snapshots: [
@@ -269,13 +296,13 @@ final class CPUSnapshotViewModelTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(viewModel.advancedInsights.count, 3)
-        XCTAssertEqual(viewModel.advancedInsights[0].title, "Most active cluster")
+        XCTAssertEqual(viewModel.advancedInsights[0].title, "Most Active Cluster")
         XCTAssertEqual(viewModel.advancedInsights[0].value, "72%")
         XCTAssertEqual(viewModel.advancedInsights[0].detail, "E-Cluster carries current load")
-        XCTAssertEqual(viewModel.advancedInsights[1].title, "Peak core")
+        XCTAssertEqual(viewModel.advancedInsights[1].title, "Peak Core")
         XCTAssertEqual(viewModel.advancedInsights[1].value, "3.65 GHz")
         XCTAssertEqual(viewModel.advancedInsights[1].detail, "CPU 1 is highest right now")
-        XCTAssertEqual(viewModel.advancedInsights[2].title, "Power draw")
+        XCTAssertEqual(viewModel.advancedInsights[2].title, "Power Draw")
         XCTAssertEqual(viewModel.advancedInsights[2].value, "2.30 W")
         XCTAssertEqual(viewModel.advancedInsights[2].detail, "CPU dominates package usage")
         XCTAssertEqual(viewModel.selectedFrequencyCluster?.name, "E-Cluster")

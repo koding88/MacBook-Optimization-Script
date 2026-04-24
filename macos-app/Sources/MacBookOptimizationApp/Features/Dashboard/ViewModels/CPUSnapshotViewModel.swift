@@ -1,5 +1,4 @@
 import Foundation
-import Combine
 
 @MainActor
 final class CPUSnapshotViewModel: ObservableObject {
@@ -277,7 +276,7 @@ final class CPUSnapshotViewModel: ObservableObject {
         if let busiestCluster = metrics.clusters.max(by: { $0.activeResidency < $1.activeResidency }) {
             insights.append(
                 AdvancedInsight(
-                    title: "Most active cluster",
+                    title: "Most Active Cluster",
                     value: "\(Int(busiestCluster.activeResidency.rounded()))%",
                     detail: "\(busiestCluster.name) carries current load"
                 )
@@ -287,7 +286,7 @@ final class CPUSnapshotViewModel: ObservableObject {
         if let peakCore = metrics.cores.max(by: { $0.frequency < $1.frequency }) {
             insights.append(
                 AdvancedInsight(
-                    title: "Peak core",
+                    title: "Peak Core",
                     value: Self.gigahertzString(forMHz: peakCore.frequency),
                     detail: "CPU \(peakCore.id) is highest right now"
                 )
@@ -296,7 +295,7 @@ final class CPUSnapshotViewModel: ObservableObject {
 
         insights.append(
             AdvancedInsight(
-                title: "Power draw",
+                title: "Power Draw",
                 value: Self.wattsString(forMilliwatts: metrics.power.combined),
                 detail: dominantPowerDetail(for: metrics.power)
             )
