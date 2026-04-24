@@ -2,6 +2,20 @@ import XCTest
 @testable import MacBookOptimizationApp
 
 final class CPUMetricsParserTests: XCTestCase {
+    func testOverallCPUUsageReturnsZeroWhenNoCoresExist() {
+        let metrics = CPUMetrics(
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            cpuName: "Apple M3 Pro",
+            totalCores: 0,
+            thermalPressure: .nominal,
+            clusters: [],
+            cores: [],
+            power: .init(cpu: 1200, gpu: 300, ane: 40)
+        )
+
+        XCTAssertEqual(metrics.overallCPUUsage, 0)
+    }
+
     func testFrequencyDistributionParsesAllBucketsFromClusterResidencyLine() {
         let output = """
         Current pressure level: Nominal

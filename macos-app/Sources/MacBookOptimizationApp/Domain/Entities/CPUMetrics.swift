@@ -54,6 +54,7 @@ struct CPUMetrics: Equatable {
     }
     
     var overallCPUUsage: Double {
+        guard !cores.isEmpty else { return 0 }
         let totalActive = cores.reduce(0.0) { $0 + $1.activeResidency }
         return totalActive / Double(cores.count)
     }

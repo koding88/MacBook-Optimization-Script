@@ -1,36 +1,32 @@
-import SwiftUI
 import Charts
+import SwiftUI
 
 struct CPUSnapshotView: View {
     @ObservedObject var viewModel: CPUSnapshotViewModel
     @EnvironmentObject private var dashboardModel: OptimizationDashboardViewModel
-    
+
+    private let cardCornerRadius: CGFloat = 12
+    private let meterHeight: CGFloat = 12
+
     private var localizer: AppLocalizer {
         AppLocalizer(language: dashboardModel.settings.language)
     }
-    
+
+    private var overallChartIdentity: String {
+        viewModel.advancedMetricsHistory.count >= 2 ? "advanced-overall-chart" : "basic-overall-chart"
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 headerSection
-                
-                if viewModel.currentMetrics != nil {
-                    cpuUsageChart
-                    
-                    HStack(spacing: 16) {
-                        clusterActivitySection
-                        coreFrequencyHeatmap
-                    }
-                    
-                    coreResidencyBars
-                    
-                    HStack(spacing: 16) {
-                        frequencyDistributionChart
-                        powerConsumptionGauges
-                    }
+
+                if let basicMetrics = viewModel.basicMetrics {
+                    overallUsageSection(metrics: basicMetrics)
+                    advancedDiagnosticsSection
                 } else if viewModel.isMonitoring {
                     ProgressView(localizer.text(.cpuSnapshotCollecting))
-                        .frame(maxWidth: .infinity, minHeight: 200)
+                        .frame(maxWidth: .infinity, minHeight: 220)
                 } else {
                     emptyStateView
                 }
@@ -38,8 +34,6 @@ struct CPUSnapshotView: View {
             .padding()
         }
         .onAppear {
-            // Only start if not already started
-            // If paused, resume without requiring password
             if viewModel.monitoringState == .notStarted {
                 viewModel.startMonitoring()
             } else if viewModel.monitoringState == .paused {
@@ -47,347 +41,691 @@ struct CPUSnapshotView: View {
             }
         }
         .onDisappear {
-            // Pause instead of stop to keep powermetrics running
-            // This avoids requiring password when user returns
             if viewModel.monitoringState == .running {
                 viewModel.pauseMonitoring()
             }
         }
     }
-    
+
     private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(localizer.text(.cpuSnapshotTitle))
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                if let metrics = viewModel.currentMetrics {
+                    .font(.title2.weight(.semibold))
+
+                if let metrics = viewModel.basicMetrics {
                     HStack(spacing: 8) {
                         Text(metrics.cpuName)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
                         Text("•")
-                            .foregroundColor(.secondary)
-                        
                         Text("\(metrics.totalCores) \(localizer.text(.cpuSnapshotCores))")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
                         Text("•")
-                            .foregroundColor(.secondary)
-                        
-                        Text("\(localizer.text(.cpuSnapshotThermal)): \(metrics.thermalPressure.displayName)")
-                            .font(.subheadline)
-                            .foregroundColor(thermalColor(metrics.thermalPressure))
+                        Text("\(localizer.text(.cpuSnapshotThermal)): \(metrics.thermalState.displayName)")
+                            .foregroundStyle(thermalColor(metrics.thermalState))
                     }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
             }
-            
-            Spacer()
-            
+
+            Spacer(minLength: 16)
+
             HStack(spacing: 8) {
                 Text("\(localizer.text(.cpuSnapshotAutoRefresh)):")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                Picker("", selection: $viewModel.refreshInterval) {
+                    .foregroundStyle(.secondary)
+
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { viewModel.refreshInterval },
+                        set: { viewModel.updateRefreshInterval($0) }
+                    )
+                ) {
                     ForEach(CPUSnapshotViewModel.RefreshInterval.allCases) { interval in
-                        Text(interval.displayName).tag(interval)
+                        Text(localizer.text(interval.localizationKey)).tag(interval)
                     }
                 }
                 .pickerStyle(.menu)
                 .frame(width: 120)
-                .onChange(of: viewModel.refreshInterval) { newValue in
-                    viewModel.updateRefreshInterval(newValue)
-                }
             }
         }
         .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
     }
-    
-    private var cpuUsageChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(localizer.text(.cpuSnapshotOverallUsage))
-                .font(.headline)
-            
-            if viewModel.metricsHistory.count >= 2 {
-                Chart {
-                    ForEach(Array(viewModel.cpuUsageChartData.enumerated()), id: \.offset) { _, data in
-                        LineMark(
-                            x: .value("Time", data.0),
-                            y: .value("Usage", data.1)
-                        )
-                        .foregroundStyle(Color.blue.gradient)
-                        
-                        AreaMark(
-                            x: .value("Time", data.0),
-                            y: .value("Usage", data.1)
-                        )
-                        .foregroundStyle(Color.blue.opacity(0.1).gradient)
-                    }
-                }
-                .chartYScale(domain: 0...100)
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisValueLabel {
-                            if let intValue = value.as(Double.self) {
-                                Text("\(Int(intValue))%")
-                            }
-                        }
-                        AxisGridLine()
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks { value in
-                        AxisValueLabel(format: .dateTime.hour().minute())
-                    }
-                }
-                .frame(height: 150)
-            } else {
-                Text(localizer.text(.cpuSnapshotCollectingData))
-                    .foregroundColor(.secondary)
-                    .frame(height: 150)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
-    }
-    
-    private var clusterActivitySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(localizer.text(.cpuSnapshotClusterActivity))
-                .font(.headline)
-            
-            if let metrics = viewModel.currentMetrics {
-                ForEach(metrics.clusters) { cluster in
+
+    private func overallUsageSection(metrics: BasicCPUMetrics) -> some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(cluster.name)
-                                .font(.subheadline)
-                            Spacer()
-                            Text("\(Int(cluster.activeResidency))%")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                
-                                Rectangle()
-                                    .fill(clusterColor(cluster.name))
-                                    .frame(width: geometry.size.width * (cluster.activeResidency / 100))
-                            }
-                        }
-                        .frame(height: 8)
-                        .cornerRadius(4)
+                        Text(localizer.text(.cpuSnapshotOverallUsage))
+                            .font(.headline)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 12) {
+                        metricPill(
+                            title: localizer.text(.cpuSnapshotThermal),
+                            value: metrics.thermalState.displayName,
+                            accent: thermalColor(metrics.thermalState)
+                        )
+
+                        metricPill(
+                            title: localizer.text(.cpuSnapshotCores),
+                            value: "\(metrics.totalCores)",
+                            accent: .blue
+                        )
                     }
                 }
-            }
-        }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
-        .frame(maxWidth: .infinity)
-    }
-    
-    private var coreFrequencyHeatmap: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(localizer.text(.cpuSnapshotPerCoreFrequency))
-                .font(.headline)
-            
-            if let metrics = viewModel.currentMetrics {
-                let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 4)
-                
-                LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(metrics.cores) { core in
-                        VStack(spacing: 2) {
-                            Text("\(core.id)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            
-                            Text("\(core.frequency)")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(8)
-                        .background(frequencyColor(core.frequency, max: 3500))
-                        .cornerRadius(4)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
-        .frame(maxWidth: .infinity)
-    }
-    
-    private var coreResidencyBars: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(localizer.text(.cpuSnapshotCoreResidency))
-                .font(.headline)
-            
-            if let metrics = viewModel.currentMetrics {
-                ForEach(metrics.clusters) { cluster in
-                    HStack(spacing: 8) {
-                        Text(cluster.name)
-                            .font(.subheadline)
-                            .frame(width: 100, alignment: .leading)
-                        
-                        GeometryReader { geometry in
-                            HStack(spacing: 0) {
-                                Rectangle()
-                                    .fill(Color.green)
-                                    .frame(width: geometry.size.width * (cluster.activeResidency / 100))
-                                
-                                Rectangle()
-                                    .fill(Color.yellow)
-                                    .frame(width: geometry.size.width * (cluster.idleResidency / 100))
-                                
-                                Rectangle()
-                                    .fill(Color.gray)
-                                    .frame(width: geometry.size.width * (cluster.downResidency / 100))
-                            }
-                        }
-                        .frame(height: 24)
-                        .cornerRadius(4)
-                        
-                        Text("\(Int(cluster.activeResidency))% / \(Int(cluster.idleResidency))% / \(Int(cluster.downResidency))%")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .frame(width: 120, alignment: .trailing)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
-    }
-    
-    private var frequencyDistributionChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(localizer.text(.cpuSnapshotFrequencyDistribution))
-                .font(.headline)
-            
-            // Show the first cluster that has frequency distribution data
-            if let metrics = viewModel.currentMetrics,
-               let cluster = metrics.clusters.first(where: { !$0.frequencyDistribution.isEmpty }) {
-                if cluster.frequencyDistribution.isEmpty {
-                    Text("No frequency data available")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(height: 150)
-                } else {
+
+                if viewModel.cpuUsageChartData.count >= 2 {
                     Chart {
-                        ForEach(cluster.frequencyDistribution, id: \.frequency) { bucket in
-                            BarMark(
-                                x: .value("Frequency", bucket.frequency),
-                                y: .value("Percentage", bucket.percentage)
+                        ForEach(Array(viewModel.cpuUsageChartData.enumerated()), id: \.offset) { _, item in
+                            AreaMark(
+                                x: .value("Time", item.0),
+                                y: .value("Usage", item.1)
                             )
-                            .foregroundStyle(Color.purple.gradient)
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(Color.blue.opacity(0.14))
+
+                            LineMark(
+                                x: .value("Time", item.0),
+                                y: .value("Usage", item.1)
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .lineStyle(.init(lineWidth: 2.5, lineCap: .round))
+                            .foregroundStyle(Color.blue.opacity(0.78))
+                        }
+                    }
+                    .chartYScale(domain: 0...100)
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { value in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.8))
+                                .foregroundStyle(Color.secondary.opacity(0.12))
+                            AxisValueLabel {
+                                if let intValue = value.as(Int.self) {
+                                    Text("\(intValue)%")
+                                }
+                            }
                         }
                     }
                     .chartXAxis {
-                        AxisMarks { value in
-                            AxisValueLabel {
-                                if let frequency = value.as(Int.self) {
-                                    Text("\(frequency)")
-                                }
-                            }
+                        AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                            AxisValueLabel(format: .dateTime.hour().minute())
                         }
                     }
-                    .chartYAxis {
-                        AxisMarks(position: .leading) { value in
-                            AxisValueLabel {
-                                if let intValue = value.as(Double.self) {
-                                    Text("\(Int(intValue))%")
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: 150)
+                    .frame(height: 170)
+                    .id(overallChartIdentity)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.22), value: overallChartIdentity)
+                } else {
+                    Text(localizer.text(.cpuSnapshotCollectingData))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 170)
                 }
-            } else {
-                Text("No frequency distribution data available")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(height: 150)
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
-        .frame(maxWidth: .infinity)
     }
-    
-    private var powerConsumptionGauges: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(localizer.text(.cpuSnapshotPowerConsumption))
-                .font(.headline)
-            
-            if let metrics = viewModel.currentMetrics {
+
+    private var advancedDiagnosticsSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(localizer.text(.cpuSnapshotAdvancedTitle))
+                            .font(.headline)
+                        Text(localizer.text(.cpuSnapshotAdvancedDescription))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 16)
+
+                    if viewModel.advancedState != .running {
+                        Button(localizer.text(.cpuSnapshotAdvancedShowButton)) {
+                            viewModel.startAdvancedMonitoring()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+
+                switch viewModel.advancedState {
+                case .idle:
+                    statusMessage(
+                        viewModel.hasAdvancedMetrics
+                            ? localizer.text(.cpuSnapshotAdvancedStopped)
+                            : localizer.text(.cpuSnapshotAdvancedIdle)
+                    )
+                case .requestingAuthorization:
+                    advancedLoadingState(localizer.text(.cpuSnapshotAdvancedRequestingAuthorization))
+                case .denied:
+                    statusMessage(localizer.text(.cpuSnapshotAdvancedDenied))
+                case .failed(let message):
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(localizer.text(.cpuSnapshotAdvancedFailed))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .running:
+                    if let metrics = viewModel.advancedMetrics {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: 16) {
+                                diagnosticsLeftColumn(metrics: metrics)
+                                diagnosticsRightColumn(metrics: metrics)
+                            }
+
+                            VStack(spacing: 16) {
+                                diagnosticsLeftColumn(metrics: metrics)
+                                diagnosticsRightColumn(metrics: metrics)
+                            }
+                        }
+                    } else {
+                        advancedLoadingState(localizer.text(.cpuSnapshotCollecting))
+                    }
+                }
+            }
+        }
+    }
+
+    private func diagnosticsLeftColumn(metrics: CPUMetrics) -> some View {
+        VStack(spacing: 16) {
+            summaryInsightsCard(metrics: metrics)
+            clusterActivitySection(metrics: metrics)
+            coreResidencyBars(metrics: metrics)
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private func diagnosticsRightColumn(metrics: CPUMetrics) -> some View {
+        VStack(spacing: 16) {
+            coreFrequencyHeatmap(metrics: metrics)
+            frequencyDistributionChart(metrics: metrics)
+            powerConsumptionGauges(metrics: metrics)
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private func summaryInsightsCard(metrics: CPUMetrics) -> some View {
+        innerCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(localizer.text(.cpuSnapshotAdvancedSummary))
+                            .font(.headline)
+                        Text(localizer.text(.cpuSnapshotAdvancedSummarySubtitle))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    metricPill(
+                        title: localizer.text(.cpuSnapshotThermal),
+                        value: metrics.thermalPressure.displayName,
+                        accent: thermalColor(metrics.thermalPressure)
+                    )
+                }
+
+                HStack(spacing: 12) {
+                    statChip(
+                        title: localizer.text(.cpuSnapshotOverallUsage),
+                        value: percentString(metrics.overallCPUUsage),
+                        note: localizer.text(.cpuSnapshotAdvancedLiveSample)
+                    )
+                    statChip(
+                        title: localizer.text(.cpuSnapshotPowerConsumption),
+                        value: wattsString(metrics.power.combined),
+                        note: localizer.text(.cpuSnapshotAdvancedPackageTotal)
+                    )
+                }
+
+                VStack(spacing: 10) {
+                    ForEach(Array(viewModel.advancedInsights.enumerated()), id: \.offset) { _, insight in
+                        insightRow(insight)
+                    }
+                }
+            }
+        }
+    }
+
+    private func clusterActivitySection(metrics: CPUMetrics) -> some View {
+        innerCard {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionHeader(
+                    title: localizer.text(.cpuSnapshotClusterActivity),
+                    subtitle: localizer.text(.cpuSnapshotAdvancedClusterSubtitle)
+                )
+
                 VStack(spacing: 12) {
-                    powerGauge(label: "CPU", value: metrics.power.cpu, max: 2000, color: .blue)
-                    powerGauge(label: "GPU", value: metrics.power.gpu, max: 2000, color: .green)
-                    powerGauge(label: "Total", value: metrics.power.combined, max: 4000, color: .orange)
+                    ForEach(metrics.clusters) { cluster in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(cluster.name)
+                                    .font(.subheadline.weight(.medium))
+
+                                Spacer()
+
+                                Text(percentString(cluster.activeResidency))
+                                    .font(.title3.weight(.semibold))
+                            }
+
+                            standardizedBar(
+                                segments: [
+                                    .init(value: cluster.activeResidency / 100, color: clusterColor(cluster.name).opacity(0.85)),
+                                    .init(value: max(0, 1 - (cluster.activeResidency / 100)), color: clusterColor(cluster.name).opacity(0.18))
+                                ]
+                            )
+
+                            HStack(spacing: 10) {
+                                compactAnnotation(localizer.text(.cpuSnapshotAdvancedFrequencyLabel), value: gigahertzString(cluster.activeFrequency))
+                                compactAnnotation(localizer.text(.cpuSnapshotAdvancedOnlineLabel), value: percentString(cluster.online))
+                            }
+                        }
+                    }
                 }
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
-        .frame(maxWidth: .infinity)
     }
-    
-    private func powerGauge(label: String, value: Int, max: Int, color: Color) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .font(.subheadline)
-                .frame(width: 50, alignment: .leading)
-            
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                    
-                    Rectangle()
-                        .fill(color.gradient)
-                        .frame(width: geometry.size.width * (Double(value) / Double(max)))
+
+    private func coreResidencyBars(metrics: CPUMetrics) -> some View {
+        innerCard {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionHeader(
+                    title: localizer.text(.cpuSnapshotCoreResidency),
+                    subtitle: localizer.text(.cpuSnapshotAdvancedResidencySubtitle)
+                )
+
+                VStack(spacing: 12) {
+                    ForEach(metrics.clusters) { cluster in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(cluster.name)
+                                    .font(.subheadline.weight(.medium))
+
+                                Spacer()
+
+                                Text(percentString(cluster.activeResidency))
+                                    .font(.title3.weight(.semibold))
+                            }
+
+                            standardizedBar(
+                                segments: [
+                                    .init(value: cluster.activeResidency / 100, color: .blue.opacity(0.75)),
+                                    .init(value: cluster.idleResidency / 100, color: .teal.opacity(0.45)),
+                                    .init(value: cluster.downResidency / 100, color: .gray.opacity(0.35))
+                                ]
+                            )
+
+                            HStack(spacing: 10) {
+                                compactAnnotation(localizer.text(.cpuSnapshotAdvancedActiveShort), value: percentString(cluster.activeResidency))
+                                compactAnnotation(localizer.text(.cpuSnapshotAdvancedIdleShort), value: percentString(cluster.idleResidency))
+                                compactAnnotation(localizer.text(.cpuSnapshotAdvancedDownShort), value: percentString(cluster.downResidency))
+                            }
+                        }
+                    }
                 }
             }
-            .frame(height: 20)
-            .cornerRadius(10)
-            
-            Text("\(value) mW")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .trailing)
         }
     }
-    
+
+    private func coreFrequencyHeatmap(metrics: CPUMetrics) -> some View {
+        innerCard {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionHeader(
+                    title: localizer.text(.cpuSnapshotPerCoreFrequency),
+                    subtitle: localizer.text(.cpuSnapshotAdvancedHeatmapSubtitle)
+                )
+
+                let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(metrics.cores) { core in
+                        let intensity = frequencyIntensity(for: core.frequency)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("CPU \(core.id)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            Text(gigahertzString(core.frequency))
+                                .font(.headline.weight(.semibold))
+
+                            Text(percentString(core.activeResidency))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.blue.opacity(0.08 + (0.28 * intensity)))
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.blue.opacity(0.08 + (0.24 * intensity)), lineWidth: 1)
+                        }
+                    }
+                }
+
+                frequencyLegend
+            }
+        }
+    }
+
+    private var frequencyLegend: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let range = viewModel.observedFrequencyRange {
+                HStack {
+                    Text(localizer.text(.cpuSnapshotAdvancedFrequencyScale))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text("\(range.lowerBound) MHz - \(range.upperBound) MHz")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 8) {
+                ForEach(Array(legendStops.enumerated()), id: \.offset) { index, stop in
+                    VStack(alignment: .leading, spacing: 4) {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.blue.opacity(stop.opacity))
+                            .frame(height: 10)
+                        Text(stop.title)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private func frequencyDistributionChart(metrics: CPUMetrics) -> some View {
+        innerCard {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionHeader(
+                    title: localizer.text(.cpuSnapshotFrequencyDistribution),
+                    subtitle: localizer.text(.cpuSnapshotAdvancedDistributionSubtitle)
+                )
+
+                let eligibleClusters = metrics.clusters.filter { !$0.frequencyDistribution.isEmpty }
+
+                if !eligibleClusters.isEmpty {
+                    Picker(
+                        localizer.text(.cpuSnapshotAdvancedClusterPicker),
+                        selection: Binding(
+                            get: { viewModel.selectedFrequencyClusterID ?? "" },
+                            set: { viewModel.selectedFrequencyClusterID = $0 }
+                        )
+                    ) {
+                        ForEach(eligibleClusters) { cluster in
+                            Text(cluster.name).tag(cluster.id)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if let cluster = viewModel.selectedFrequencyCluster {
+                        Chart {
+                            ForEach(cluster.frequencyDistribution, id: \.frequency) { bucket in
+                                BarMark(
+                                    x: .value(localizer.text(.cpuSnapshotAdvancedChartFrequencyAxis), bucket.frequency),
+                                    y: .value(localizer.text(.cpuSnapshotAdvancedChartPercentAxis), bucket.percentage)
+                                )
+                                .cornerRadius(4)
+                                .foregroundStyle(Color.blue.opacity(0.72))
+                            }
+                        }
+                        .chartYScale(domain: 0...100)
+                        .chartXAxis {
+                            AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.8))
+                                    .foregroundStyle(Color.secondary.opacity(0.1))
+                                AxisValueLabel {
+                                    if let frequency = value.as(Int.self) {
+                                        Text("\(frequency) MHz")
+                                    }
+                                }
+                            }
+                        }
+                        .chartYAxis {
+                            AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { value in
+                                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.8))
+                                    .foregroundStyle(Color.secondary.opacity(0.1))
+                                AxisValueLabel {
+                                    if let percent = value.as(Int.self) {
+                                        Text("\(percent)%")
+                                    }
+                                }
+                            }
+                        }
+                        .frame(height: 200)
+
+                        HStack(spacing: 10) {
+                            compactAnnotation(localizer.text(.cpuSnapshotAdvancedChartFrequencyAxis), value: cluster.name)
+                            if let peakBucket = cluster.frequencyDistribution.max(by: { $0.percentage < $1.percentage }) {
+                                compactAnnotation(localizer.text(.cpuSnapshotAdvancedPeakBucket), value: "\(peakBucket.frequency) MHz")
+                            }
+                        }
+                    } else {
+                        chartEmptyState(localizer.text(.cpuSnapshotNoFrequencyDistributionData))
+                    }
+                } else {
+                    chartEmptyState(localizer.text(.cpuSnapshotNoFrequencyDistributionData))
+                }
+            }
+        }
+    }
+
+    private func powerConsumptionGauges(metrics: CPUMetrics) -> some View {
+        innerCard {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionHeader(
+                    title: localizer.text(.cpuSnapshotPowerConsumption),
+                    subtitle: localizer.text(.cpuSnapshotAdvancedPowerSubtitle)
+                )
+
+                VStack(spacing: 14) {
+                    powerRow(
+                        title: "CPU",
+                        value: metrics.power.cpu,
+                        max: max(metrics.power.combined, 1),
+                        color: .blue
+                    )
+                    powerRow(
+                        title: "GPU",
+                        value: metrics.power.gpu,
+                        max: max(metrics.power.combined, 1),
+                        color: .teal
+                    )
+                    powerRow(
+                        title: "ANE",
+                        value: metrics.power.ane,
+                        max: max(metrics.power.combined, 1),
+                        color: .gray
+                    )
+                    powerRow(
+                        title: localizer.text(.cpuSnapshotAdvancedTotalPowerLabel),
+                        value: metrics.power.combined,
+                        max: max(metrics.power.combined, 1),
+                        color: .orange
+                    )
+                }
+            }
+        }
+    }
+
+    private func powerRow(title: String, value: Int, max maxValue: Int, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+
+                Spacer()
+
+                Text(wattsString(value))
+                    .font(.title3.weight(.semibold))
+            }
+
+            standardizedBar(
+                segments: [
+                    .init(value: Double(value) / Double(maxValue), color: color.opacity(0.82)),
+                    .init(value: Swift.max(0, 1 - (Double(value) / Double(maxValue))), color: color.opacity(0.16))
+                ]
+            )
+        }
+    }
+
+    private func advancedLoadingState(_ title: String) -> some View {
+        HStack {
+            Spacer()
+            ProgressView(title)
+                .controlSize(.regular)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, minHeight: 180)
+    }
+
+    private func statusMessage(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func chartEmptyState(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: 180)
+    }
+
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding()
+            .background(cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+    }
+
+    private func innerCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding()
+            .background(innerCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func sectionHeader(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.headline)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func statChip(title: String, value: String, note: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.semibold))
+            Text(note)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func metricPill(title: String, value: String, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(accent)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func compactAnnotation(_ title: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color(nsColor: .windowBackgroundColor), in: Capsule())
+    }
+
+    private func insightRow(_ insight: CPUSnapshotViewModel.AdvancedInsight) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(insight.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(insight.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(insight.value)
+                .font(.title3.weight(.semibold))
+        }
+        .padding(12)
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func standardizedBar(segments: [BarSegment]) -> some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    Rectangle()
+                        .fill(segment.color)
+                        .frame(width: geometry.size.width * max(0, min(segment.value, 1)))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: meterHeight / 2, style: .continuous))
+        }
+        .frame(height: meterHeight)
+    }
+
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "cpu")
                 .font(.system(size: 48))
-                .foregroundColor(.secondary)
-            
+                .foregroundStyle(.secondary)
+
             Text(localizer.text(.cpuSnapshotNotStarted))
                 .font(.headline)
-            
+
             Text(localizer.text(.cpuSnapshotClickToStart))
                 .font(.subheadline)
-                .foregroundColor(.secondary)
-            
+                .foregroundStyle(.secondary)
+
             Button(localizer.text(.cpuSnapshotStartMonitoring)) {
                 viewModel.startMonitoring()
             }
@@ -395,11 +733,27 @@ struct CPUSnapshotView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 300)
         .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
     }
-    
-    // Helper functions
+
+    private var cardBackground: Color {
+        Color(nsColor: .controlBackgroundColor)
+    }
+
+    private var innerCardBackground: some ShapeStyle {
+        Color(nsColor: .windowBackgroundColor)
+    }
+
+    private var legendStops: [(title: String, opacity: Double)] {
+        [
+            (localizer.text(.cpuSnapshotAdvancedLegendLow), 0.12),
+            (localizer.text(.cpuSnapshotAdvancedLegendMid), 0.2),
+            (localizer.text(.cpuSnapshotAdvancedLegendHigh), 0.28),
+            (localizer.text(.cpuSnapshotAdvancedLegendPeak), 0.36)
+        ]
+    }
+
     private func thermalColor(_ pressure: CPUMetrics.ThermalPressure) -> Color {
         switch pressure {
         case .nominal: return .green
@@ -408,19 +762,36 @@ struct CPUSnapshotView: View {
         case .sleeping: return .gray
         }
     }
-    
+
     private func clusterColor(_ name: String) -> Color {
-        if name.contains("E-") { return .blue }
-        if name.contains("P0-") { return .green }
-        if name.contains("P1-") { return .purple }
+        if name.contains("E-") { return .teal }
+        if name.contains("P0-") { return .blue }
+        if name.contains("P1-") { return .indigo }
         return .gray
     }
-    
-    private func frequencyColor(_ frequency: Int, max: Int) -> Color {
-        let ratio = Double(frequency) / Double(max)
-        if ratio < 0.3 { return Color.blue.opacity(0.3) }
-        if ratio < 0.6 { return Color.green.opacity(0.5) }
-        if ratio < 0.8 { return Color.yellow.opacity(0.7) }
-        return Color.red.opacity(0.8)
+
+    private func frequencyIntensity(for frequency: Int) -> Double {
+        guard let range = viewModel.observedFrequencyRange, range.lowerBound < range.upperBound else {
+            return 0.4
+        }
+
+        return Double(frequency - range.lowerBound) / Double(range.upperBound - range.lowerBound)
+    }
+
+    private func percentString(_ value: Double) -> String {
+        "\(Int(value.rounded()))%"
+    }
+
+    private func gigahertzString(_ frequencyInMHz: Int) -> String {
+        String(format: "%.2f GHz", Double(frequencyInMHz) / 1000)
+    }
+
+    private func wattsString(_ milliwatts: Int) -> String {
+        String(format: "%.2f W", Double(milliwatts) / 1000)
+    }
+
+    private struct BarSegment {
+        let value: Double
+        let color: Color
     }
 }

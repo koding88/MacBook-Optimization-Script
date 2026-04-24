@@ -88,16 +88,19 @@ struct BatterySnapshotView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
-                Picker("", selection: $viewModel.refreshInterval) {
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { viewModel.refreshInterval },
+                        set: { viewModel.updateRefreshInterval($0) }
+                    )
+                ) {
                     ForEach(BatterySnapshotViewModel.RefreshInterval.allCases) { interval in
-                        Text(interval.displayName).tag(interval)
+                        Text(localizer.text(interval.localizationKey)).tag(interval)
                     }
                 }
                 .pickerStyle(.menu)
                 .frame(width: 120)
-                .onChange(of: viewModel.refreshInterval) { newValue in
-                    viewModel.updateRefreshInterval(newValue)
-                }
             }
         }
         .padding()
@@ -499,6 +502,9 @@ struct BatterySnapshotView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 28))
                 .foregroundStyle(.orange)
+
+            Text(localizer.text(.batterySnapshotFailed))
+                .font(.headline)
 
             Text(error)
                 .multilineTextAlignment(.center)

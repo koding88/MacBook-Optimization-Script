@@ -33,13 +33,13 @@ final class BatterySnapshotViewModel: ObservableObject {
 
         var id: Int { rawValue }
 
-        var displayName: String {
+        var localizationKey: LocalizedKey {
             switch self {
-            case .fifteenSeconds: return "15 seconds"
-            case .thirtySeconds: return "30 seconds"
-            case .oneMinute: return "1 minute"
-            case .fiveMinutes: return "5 minutes"
-            case .manual: return "Manual"
+            case .fifteenSeconds: return .batterySnapshotRefreshIntervalFifteenSeconds
+            case .thirtySeconds: return .batterySnapshotRefreshIntervalThirtySeconds
+            case .oneMinute: return .batterySnapshotRefreshIntervalOneMinute
+            case .fiveMinutes: return .batterySnapshotRefreshIntervalFiveMinutes
+            case .manual: return .batterySnapshotRefreshIntervalManual
             }
         }
 
@@ -90,7 +90,8 @@ final class BatterySnapshotViewModel: ObservableObject {
                     }
                 }
             } catch {
-                self.error = error.localizedDescription
+                guard !Task.isCancelled else { return }
+                self.error = Self.sanitizedErrorMessage(from: error)
                 isMonitoring = false
                 monitoringState = .notStarted
             }
@@ -122,6 +123,8 @@ final class BatterySnapshotViewModel: ObservableObject {
     }
 
     func updateRefreshInterval(_ interval: RefreshInterval) {
+        guard refreshInterval != interval else { return }
+
         let wasMonitoring = monitoringState != .notStarted
         if wasMonitoring {
             stopMonitoring()
@@ -145,12 +148,20 @@ final class BatterySnapshotViewModel: ObservableObject {
                     metricsHistory.removeFirst()
                 }
             } catch {
-                self.error = error.localizedDescription
+                self.error = Self.sanitizedErrorMessage(from: error)
             }
         }
     }
 
     var levelHistory: [(Date, Int)] {
         metricsHistory.map { ($0.timestamp, $0.level) }
+    }
+
+    private static func sanitizedErrorMessage(from error: Error) -> String {
+        let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else {
+            return "Unable to load battery snapshot."
+        }
+        return message
     }
 }

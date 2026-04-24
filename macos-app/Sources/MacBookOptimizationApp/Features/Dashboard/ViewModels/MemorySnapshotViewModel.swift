@@ -33,13 +33,13 @@ final class MemorySnapshotViewModel: ObservableObject {
 
         var id: Int { rawValue }
 
-        var displayName: String {
+        var localizationKey: LocalizedKey {
             switch self {
-            case .fiveSeconds: return "5 seconds"
-            case .fifteenSeconds: return "15 seconds"
-            case .thirtySeconds: return "30 seconds"
-            case .oneMinute: return "1 minute"
-            case .fiveMinutes: return "5 minutes"
+            case .fiveSeconds: return .memorySnapshotRefreshIntervalFiveSeconds
+            case .fifteenSeconds: return .memorySnapshotRefreshIntervalFifteenSeconds
+            case .thirtySeconds: return .memorySnapshotRefreshIntervalThirtySeconds
+            case .oneMinute: return .memorySnapshotRefreshIntervalOneMinute
+            case .fiveMinutes: return .memorySnapshotRefreshIntervalFiveMinutes
             }
         }
 
@@ -90,7 +90,8 @@ final class MemorySnapshotViewModel: ObservableObject {
                     }
                 }
             } catch {
-                self.error = error.localizedDescription
+                guard !Task.isCancelled else { return }
+                self.error = Self.sanitizedErrorMessage(from: error)
                 isMonitoring = false
                 monitoringState = .notStarted
             }
@@ -122,6 +123,8 @@ final class MemorySnapshotViewModel: ObservableObject {
     }
 
     func updateRefreshInterval(_ interval: RefreshInterval) {
+        guard refreshInterval != interval else { return }
+
         let wasMonitoring = monitoringState != .notStarted
         if wasMonitoring {
             stopMonitoring()
@@ -136,5 +139,13 @@ final class MemorySnapshotViewModel: ObservableObject {
 
     var pressureHistory: [(Date, Double)] {
         metricsHistory.map { ($0.timestamp, $0.pressureScore) }
+    }
+
+    private static func sanitizedErrorMessage(from error: Error) -> String {
+        let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else {
+            return "Unable to load memory snapshot."
+        }
+        return message
     }
 }
