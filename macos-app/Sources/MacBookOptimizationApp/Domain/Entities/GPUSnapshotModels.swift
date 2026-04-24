@@ -2,6 +2,8 @@ import CoreGraphics
 import Foundation
 
 struct GPUSnapshotMetrics: Equatable {
+    static let defaultMetricsTitle = "GPU Metrics"
+
     struct DeviceSummary: Equatable, Identifiable {
         let id: String
         let name: String
@@ -25,15 +27,16 @@ struct GPUSnapshotMetrics: Equatable {
         let isMain: Bool
     }
 
-    struct LiveTelemetryStatus: Equatable {
+    struct GPUMetricsStatus: Equatable {
         let title: String
-        let detail: String
+        let detail: String?
+        let metrics: GPUMetrics?
     }
 
     let timestamp: Date
     let devices: [DeviceSummary]
     let displays: [DisplaySummary]
-    let liveTelemetry: LiveTelemetryStatus
+    let gpuMetrics: GPUMetricsStatus
 }
 
 @MainActor
@@ -82,9 +85,10 @@ struct NativeGPUSnapshotProvider: GPUSnapshotProviding {
             timestamp: .now,
             devices: devices,
             displays: displays,
-            liveTelemetry: .init(
-                title: "Live telemetry unavailable",
-                detail: "Live GPU metrics are not exposed by stable macOS APIs."
+            gpuMetrics: .init(
+                title: GPUSnapshotMetrics.defaultMetricsTitle,
+                detail: nil,
+                metrics: nil
             )
         )
     }

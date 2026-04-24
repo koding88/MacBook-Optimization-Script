@@ -43,16 +43,18 @@ final class GPUSnapshotViewModelTests: XCTestCase {
                             isMain: true
                         )
                     ],
-                    liveTelemetry: .init(
-                        title: "Live telemetry unavailable",
-                        detail: "Public API unavailable."
+                    gpuMetrics: .init(
+                        title: GPUSnapshotMetrics.defaultMetricsTitle,
+                        detail: nil,
+                        metrics: nil
                     )
                 )
             )
         )
         let viewModel = GPUSnapshotViewModel(
             provider: provider,
-            displayObserver: MockGPUDisplayConfigurationObserver()
+            displayObserver: MockGPUDisplayConfigurationObserver(),
+            advancedMonitoringService: MockAdvancedGPUMonitoringService()
         )
 
         viewModel.startMonitoring()
@@ -65,19 +67,27 @@ final class GPUSnapshotViewModelTests: XCTestCase {
 
     func testRefreshSurfacesCollectorError() {
         let provider = StubGPUSnapshotProvider(result: .failure(TestGPUError.failed))
-        let viewModel = GPUSnapshotViewModel(provider: provider, displayObserver: MockGPUDisplayConfigurationObserver())
+        let viewModel = GPUSnapshotViewModel(
+            provider: provider,
+            displayObserver: MockGPUDisplayConfigurationObserver(),
+            advancedMonitoringService: MockAdvancedGPUMonitoringService()
+        )
 
         viewModel.startMonitoring()
 
         XCTAssertNil(viewModel.currentMetrics)
         XCTAssertEqual(viewModel.error, TestGPUError.failed.localizedDescription)
-        XCTAssertEqual(viewModel.monitoringState, .notStarted)
+        XCTAssertEqual(viewModel.monitoringState, GPUSnapshotViewModel.MonitoringState.notStarted)
     }
 
     func testDisplayConfigurationChangeInvalidatesAndRefreshesSnapshot() {
         let provider = CountingGPUSnapshotProvider()
         let observer = MockGPUDisplayConfigurationObserver()
-        let viewModel = GPUSnapshotViewModel(provider: provider, displayObserver: observer)
+        let viewModel = GPUSnapshotViewModel(
+            provider: provider,
+            displayObserver: observer,
+            advancedMonitoringService: MockAdvancedGPUMonitoringService()
+        )
 
         viewModel.startMonitoring()
         XCTAssertEqual(provider.collectCount, 1)
@@ -93,7 +103,8 @@ final class GPUSnapshotViewModelTests: XCTestCase {
         let observer = MockGPUDisplayConfigurationObserver()
         let viewModel = GPUSnapshotViewModel(
             provider: StubGPUSnapshotProvider(result: .success(Self.sampleMetrics)),
-            displayObserver: observer
+            displayObserver: observer,
+            advancedMonitoringService: MockAdvancedGPUMonitoringService()
         )
 
         viewModel.startMonitoring()
@@ -102,6 +113,143 @@ final class GPUSnapshotViewModelTests: XCTestCase {
         viewModel.stopMonitoring()
 
         XCTAssertEqual(observer.stopCount, 1)
+    }
+
+    func testStartAdvancedMonitoringRequestsGpuMetricsOnDemand() async throws {
+        let advancedService = MockAdvancedGPUMonitoringService()
+        advancedService.prepareOpenEndedStream(
+            yielding: [
+                GPUMetrics(
+                    timestamp: Date(timeIntervalSince1970: 1_700_000_010),
+                    powerMilliwatts: 420,
+                    frequencyMHz: 744,
+                    usagePercent: 18.5,
+                    memoryBytes: nil,
+                    processes: [
+                        .init(id: "WindowServer", name: "WindowServer", gpuMillisecondsPerSecond: 120)
+                    ]
+                )
+            ]
+        )
+        let viewModel = GPUSnapshotViewModel(
+            provider: StubGPUSnapshotProvider(result: .success(Self.sampleMetrics)),
+            displayObserver: MockGPUDisplayConfigurationObserver(),
+            advancedMonitoringService: advancedService
+        )
+
+        viewModel.startMonitoring()
+        viewModel.startAdvancedMonitoring()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(viewModel.advancedState, .running)
+        XCTAssertEqual(viewModel.currentMetrics?.gpuMetrics.metrics?.powerMilliwatts, 420)
+        XCTAssertEqual(advancedService.startCallCount, 1)
+    }
+
+    func testAdvancedAuthorizationCancellationMarksStateDenied() async throws {
+        let advancedService = MockAdvancedGPUMonitoringService()
+        advancedService.errorToThrow = AuthorizationError.commandFailed(output: "User canceled.")
+        let viewModel = GPUSnapshotViewModel(
+            provider: StubGPUSnapshotProvider(result: .success(Self.sampleMetrics)),
+            displayObserver: MockGPUDisplayConfigurationObserver(),
+            advancedMonitoringService: advancedService
+        )
+
+        viewModel.startMonitoring()
+        viewModel.startAdvancedMonitoring()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(viewModel.advancedState, .denied)
+        XCTAssertNil(viewModel.currentMetrics?.gpuMetrics.metrics)
+    }
+
+    func testAdvancedLoadingOverlayStopsAfterAuthorizationWhenNoSampleArrivesYet() async throws {
+        let advancedService = MockAdvancedGPUMonitoringService()
+        advancedService.prepareOpenEndedStream(yielding: [])
+        let viewModel = GPUSnapshotViewModel(
+            provider: StubGPUSnapshotProvider(result: .success(Self.sampleMetrics)),
+            displayObserver: MockGPUDisplayConfigurationObserver(),
+            advancedMonitoringService: advancedService
+        )
+
+        viewModel.startMonitoring()
+        viewModel.startAdvancedMonitoring()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(viewModel.advancedState, .running)
+        XCTAssertTrue(viewModel.shouldShowAdvancedLoadingOverlay)
+        XCTAssertTrue(viewModel.isWaitingForFirstAdvancedSample)
+    }
+
+    func testRefreshAdvancedMetricsRestartsRuntimeSamplingWithoutReloadingStaticSnapshot() async throws {
+        let provider = CountingGPUSnapshotProvider()
+        let advancedService = MockAdvancedGPUMonitoringService()
+        advancedService.prepareOpenEndedStream(
+            yielding: [
+                GPUMetrics(
+                    timestamp: Date(timeIntervalSince1970: 1_700_000_010),
+                    powerMilliwatts: 420,
+                    frequencyMHz: 744,
+                    usagePercent: 18.5,
+                    memoryBytes: nil,
+                    processes: [
+                        .init(id: "WindowServer", name: "WindowServer", gpuMillisecondsPerSecond: 120)
+                    ]
+                )
+            ]
+        )
+        let viewModel = GPUSnapshotViewModel(
+            provider: provider,
+            displayObserver: MockGPUDisplayConfigurationObserver(),
+            advancedMonitoringService: advancedService
+        )
+
+        viewModel.startMonitoring()
+        viewModel.startAdvancedMonitoring()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(provider.collectCount, 1)
+        XCTAssertEqual(advancedService.startCallCount, 1)
+
+        viewModel.refreshAdvancedMetrics()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(provider.collectCount, 1)
+        XCTAssertEqual(advancedService.stopCallCount, 1)
+        XCTAssertEqual(advancedService.startCallCount, 2)
+    }
+
+    func testUpdateRefreshIntervalRestartsAdvancedMonitoringWhenRunning() async throws {
+        let advancedService = MockAdvancedGPUMonitoringService()
+        advancedService.prepareOpenEndedStream(
+            yielding: [
+                GPUMetrics(
+                    timestamp: Date(timeIntervalSince1970: 1_700_000_010),
+                    powerMilliwatts: 420,
+                    frequencyMHz: 744,
+                    usagePercent: 18.5,
+                    memoryBytes: nil,
+                    processes: []
+                )
+            ]
+        )
+        let viewModel = GPUSnapshotViewModel(
+            provider: StubGPUSnapshotProvider(result: .success(Self.sampleMetrics)),
+            displayObserver: MockGPUDisplayConfigurationObserver(),
+            advancedMonitoringService: advancedService
+        )
+
+        viewModel.startMonitoring()
+        viewModel.startAdvancedMonitoring()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(advancedService.startCallCount, 1)
+
+        viewModel.updateRefreshInterval(.thirtySeconds)
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(advancedService.stopCallCount, 1)
+        XCTAssertEqual(advancedService.startCallCount, 2)
     }
 }
 
@@ -134,9 +282,10 @@ private extension GPUSnapshotViewModelTests {
                     isMain: true
                 )
             ],
-            liveTelemetry: .init(
-                title: "Live telemetry unavailable",
-                detail: "Public API unavailable."
+            gpuMetrics: .init(
+                title: GPUSnapshotMetrics.defaultMetricsTitle,
+                detail: nil,
+                metrics: nil
             )
         )
     }
@@ -156,6 +305,46 @@ private final class CountingGPUSnapshotProvider: GPUSnapshotProviding {
     func collectSnapshot() throws -> GPUSnapshotMetrics {
         collectCount += 1
         return GPUSnapshotViewModelTests.sampleMetrics
+    }
+}
+
+private final class MockAdvancedGPUMonitoringService: GPUMonitoringServiceProtocol {
+    var startCallCount = 0
+    var stopCallCount = 0
+    var errorToThrow: Error?
+    var streamFactory: () -> AsyncStream<GPUMetrics> = {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+    private var continuation: AsyncStream<GPUMetrics>.Continuation?
+
+    func startMonitoring(interval: TimeInterval) async throws -> AsyncStream<GPUMetrics> {
+        startCallCount += 1
+        if let errorToThrow {
+            throw errorToThrow
+        }
+        return streamFactory()
+    }
+
+    func stopMonitoring() {
+        stopCallCount += 1
+        continuation?.finish()
+        continuation = nil
+    }
+
+    func prepareOpenEndedStream(yielding metrics: [GPUMetrics]) {
+        streamFactory = {
+            AsyncStream { continuation in
+                self.continuation = continuation
+                for metric in metrics {
+                    continuation.yield(metric)
+                }
+                continuation.onTermination = { [weak self] _ in
+                    self?.continuation = nil
+                }
+            }
+        }
     }
 }
 

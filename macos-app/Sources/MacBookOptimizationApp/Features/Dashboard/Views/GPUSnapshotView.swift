@@ -6,6 +6,7 @@ struct GPUSnapshotView: View {
 
     private let cardCornerRadius: CGFloat = 12
     private let miniCardCornerRadius: CGFloat = 10
+    private let advancedLoadingBlur: CGFloat = 5.5
 
     private var localizer: AppLocalizer {
         AppLocalizer(language: dashboardModel.settings.language)
@@ -13,6 +14,31 @@ struct GPUSnapshotView: View {
 
     private var displayMetrics: GPUSnapshotMetrics? {
         viewModel.currentMetrics
+    }
+
+    private var shouldBlurAdvancedContent: Bool {
+        viewModel.currentMetrics?.gpuMetrics.metrics == nil
+    }
+
+    private var advancedOverlayTitle: String {
+        if let detail = displayMetrics?.gpuMetrics.detail {
+            return advancedStatusText(for: detail)
+        }
+
+        switch viewModel.advancedState {
+        case .idle:
+            return localizer.text(.gpuSnapshotAdvancedIdle)
+        case .requestingAuthorization:
+            return localizer.text(.gpuSnapshotAdvancedRequestingAuthorization)
+        case .running:
+            return viewModel.isWaitingForFirstAdvancedSample
+                ? localizer.text(.gpuSnapshotAdvancedWaitingForFirstSample)
+                : localizer.text(.gpuSnapshotCollecting)
+        case .denied:
+            return localizer.text(.gpuSnapshotAdvancedDenied)
+        case .failed(let message):
+            return message
+        }
     }
 
     var body: some View {
@@ -24,7 +50,7 @@ struct GPUSnapshotView: View {
                     errorState(error)
                 } else if let metrics = displayMetrics {
                     overviewCard(metrics: metrics)
-                    liveTelemetryCard(metrics: metrics)
+                    gpuMetricsCard(metrics: metrics)
                     displayCard(metrics: metrics)
                 } else {
                     ProgressView(localizer.text(.gpuSnapshotCollecting))
@@ -76,7 +102,9 @@ struct GPUSnapshotView: View {
             VStack(alignment: .trailing, spacing: 8) {
                 HStack(spacing: 8) {
                     Button {
-                        viewModel.refresh()
+                        if viewModel.advancedState == .running || viewModel.isWaitingForFirstAdvancedSample {
+                            viewModel.refreshAdvancedMetrics()
+                        }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -144,33 +172,48 @@ struct GPUSnapshotView: View {
         }
     }
 
-    private func liveTelemetryCard(metrics: GPUSnapshotMetrics) -> some View {
+    private func gpuMetricsCard(metrics: GPUSnapshotMetrics) -> some View {
         sectionCard {
-            VStack(alignment: .leading, spacing: 14) {
-                sectionHeader(
-                    title: localizer.text(.gpuSnapshotLiveTitle),
-                    subtitle: metrics.liveTelemetry.title
-                )
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) {
-                        unavailableMetricCard(localizer.text(.gpuSnapshotTelemetryUsageTitle))
-                        unavailableMetricCard(localizer.text(.gpuSnapshotTelemetryFrequencyTitle))
-                        unavailableMetricCard(localizer.text(.gpuSnapshotTelemetryMemoryTitle))
-                        unavailableMetricCard(localizer.text(.gpuSnapshotTelemetryPowerTitle))
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(localizer.text(.gpuSnapshotLiveTitle))
+                            .font(.headline)
+                        Text(localizer.text(.gpuSnapshotAdvancedDescription))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
 
-                    VStack(spacing: 10) {
-                        unavailableMetricRow(localizer.text(.gpuSnapshotTelemetryUsageTitle))
-                        unavailableMetricRow(localizer.text(.gpuSnapshotTelemetryFrequencyTitle))
-                        unavailableMetricRow(localizer.text(.gpuSnapshotTelemetryMemoryTitle))
-                        unavailableMetricRow(localizer.text(.gpuSnapshotTelemetryPowerTitle))
+                    Spacer(minLength: 16)
+
+                    if viewModel.advancedState != .running {
+                        Button(localizer.text(.gpuSnapshotAdvancedShowButton)) {
+                            viewModel.startAdvancedMonitoring()
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
 
-                Text(metrics.liveTelemetry.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                advancedStatusMessage
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        gpuMetricsColumn(metrics.gpuMetrics.metrics)
+                    }
+
+                    VStack(spacing: 12) {
+                        gpuMetricsColumn(metrics.gpuMetrics.metrics)
+                    }
+                }
+                .blur(radius: shouldBlurAdvancedContent ? advancedLoadingBlur : 0)
+                .allowsHitTesting(!shouldBlurAdvancedContent)
+                .overlay {
+                    if shouldBlurAdvancedContent {
+                        advancedWaitingOverlay
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.24), value: shouldBlurAdvancedContent)
             }
         }
     }
@@ -261,35 +304,32 @@ struct GPUSnapshotView: View {
         }
     }
 
-    private func unavailableMetricRow(_ title: String) -> some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(localizer.text(.unavailable))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Image(systemName: "minus.circle")
-                .foregroundStyle(.secondary)
-                .font(.caption)
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func unavailableMetricCard(_ title: String) -> some View {
+    private func metricValueCard(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                Image(systemName: "minus.circle")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                Text(localizer.text(.unavailable))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-            }
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
+    }
+
+    private func metricWaitingCard(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -302,6 +342,33 @@ struct GPUSnapshotView: View {
     private func boolText(_ value: Bool?) -> String {
         guard let value else { return localizer.text(.unavailable) }
         return value ? localizer.text(.commonYes) : localizer.text(.commonNo)
+    }
+
+    private func percentText(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return String(format: "%.1f%%", value)
+    }
+
+    private func megahertzText(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return "\(value) MHz"
+    }
+
+    private func milliwattsText(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return "\(value) mW"
+    }
+
+    private func compactMetricLine(title: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
+        }
     }
 
     private func statusBadge(title: String) -> some View {
@@ -324,7 +391,7 @@ struct GPUSnapshotView: View {
     }
 
     private var headerStatusBadge: some View {
-        let title = localizer.text(.gpuSnapshotStaticLabel)
+        let title = viewModel.advancedState == .running ? localizer.text(.commonLive) : localizer.text(.gpuSnapshotStaticLabel)
         return Text(title)
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 10)
@@ -332,9 +399,52 @@ struct GPUSnapshotView: View {
             .background(Capsule().fill(Color.secondary.opacity(0.12)))
             .foregroundStyle(.secondary)
     }
+
+    private var advancedStatusText: String {
+        if let detail = displayMetrics?.gpuMetrics.detail {
+            return advancedStatusText(for: detail)
+        }
+
+        switch viewModel.advancedState {
+        case .idle:
+            return localizer.text(.gpuSnapshotAdvancedIdle)
+        case .requestingAuthorization:
+            return localizer.text(.gpuSnapshotAdvancedRequestingAuthorization)
+        case .running:
+            return viewModel.isWaitingForFirstAdvancedSample
+                ? localizer.text(.gpuSnapshotAdvancedWaitingForFirstSample)
+                : localizer.text(.gpuSnapshotCollecting)
+        case .denied:
+            return localizer.text(.gpuSnapshotAdvancedDenied)
+        case .failed(let message):
+            return message
+        }
+    }
+
+    private func advancedStatusText(for detail: String) -> String {
+        switch detail {
+        case "requestingAuthorization":
+            return localizer.text(.gpuSnapshotAdvancedRequestingAuthorization)
+        case "waitingForFirstSample":
+            return localizer.text(.gpuSnapshotAdvancedWaitingForFirstSample)
+        case "denied":
+            return localizer.text(.gpuSnapshotAdvancedDenied)
+        default:
+            return detail
+        }
+    }
 }
 
 private extension GPUSnapshotView {
+    func gpuMetricsColumn(_ metrics: GPUMetrics?) -> some View {
+        VStack(spacing: 12) {
+            metricValueCard(localizer.text(.gpuSnapshotTelemetryUsageTitle), value: percentText(metrics?.usagePercent))
+            metricValueCard(localizer.text(.gpuSnapshotTelemetryFrequencyTitle), value: megahertzText(metrics?.frequencyMHz))
+            metricValueCard(localizer.text(.gpuSnapshotTelemetryPowerTitle), value: milliwattsText(metrics?.powerMilliwatts))
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
     func sectionHeader(title: String, subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -383,6 +493,57 @@ private extension GPUSnapshotView {
     var cardBorder: some View {
         RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
             .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+    }
+
+    func innerMetricSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
+    }
+
+    var advancedStatusMessage: some View {
+        Group {
+            switch viewModel.advancedState {
+            case .failed:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(localizer.text(.gpuSnapshotAdvancedFailed))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.red)
+                    Text(advancedStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            default:
+                Text(advancedStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    var advancedWaitingOverlay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.42))
+
+            VStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(advancedOverlayTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 280)
+            }
+            .padding(18)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
     }
 
     func errorState(_ message: String) -> some View {

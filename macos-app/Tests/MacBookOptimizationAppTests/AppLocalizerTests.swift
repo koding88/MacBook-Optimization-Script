@@ -51,7 +51,18 @@ final class AppLocalizerTests: XCTestCase {
             .intelOnly,
             .intelOnlyHint,
             .actionUnavailableTitle,
-            .actionUnavailableIntelOnlyMessage
+            .actionUnavailableIntelOnlyMessage,
+            .gpuSnapshotAdvancedDescription,
+            .gpuSnapshotAdvancedShowButton,
+            .gpuSnapshotAdvancedIdle,
+            .gpuSnapshotAdvancedRequestingAuthorization,
+            .gpuSnapshotAdvancedDenied,
+            .gpuSnapshotAdvancedFailed,
+            .gpuSnapshotTelemetryTopProcessTitle,
+            .gpuSnapshotTelemetryNoDataTitle,
+            .gpuSnapshotTelemetryNoDataDetail,
+            .gpuSnapshotTelemetryMemoryWaitingTitle,
+            .gpuSnapshotTelemetryMemoryWaitingDetail
         ]
 
         for key in requiredKeys {
@@ -72,6 +83,16 @@ final class AppLocalizerTests: XCTestCase {
 
         XCTAssertEqual(localizer.text(.categories), "Danh mục")
         XCTAssertEqual(localizer.string("action.dns_flush.title"), "Xóa DNS cache")
+    }
+
+    func testGpuAdvancedLocalizationReturnsExpectedStrings() {
+        let english = AppLocalizer(language: .english)
+        let vietnamese = AppLocalizer(language: .vietnamese)
+
+        XCTAssertEqual(english.text(.gpuSnapshotAdvancedShowButton), "Show GPU Metrics")
+        XCTAssertEqual(english.text(.gpuSnapshotTelemetryTopProcessTitle), "Top Process")
+        XCTAssertEqual(vietnamese.text(.gpuSnapshotAdvancedRequestingAuthorization), "Đang chờ cấp quyền quản trị...")
+        XCTAssertEqual(vietnamese.text(.gpuSnapshotTelemetryMemoryWaitingTitle), "Bộ nhớ GPU")
     }
 
     func testMissingLocalizationFallsBackToKey() {
