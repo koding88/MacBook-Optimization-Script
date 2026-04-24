@@ -144,7 +144,19 @@ final class AdvancedGPUMonitoringService: GPUMonitoringServiceProtocol {
     }
 
     deinit {
-        stopMonitoring()
+        // Cancel monitoring task but skip process termination to avoid OSA prompt on app close
+        monitoringTask?.cancel()
+        monitoringTask = nil
+        
+        if let stopSignalURL = activeStopSignalURL {
+            fileManager.createFile(atPath: stopSignalURL.path, contents: Data())
+        }
+        
+        // Don't call terminatePowermetricsIfNeeded() - let OS clean up orphaned processes
+        activeOutputURL = nil
+        activeStopSignalURL = nil
+        activePIDURL = nil
+        activeWorkerPID = nil
     }
 
     private func createSessionFiles() throws -> (outputURL: URL, stopSignalURL: URL, pidURL: URL) {

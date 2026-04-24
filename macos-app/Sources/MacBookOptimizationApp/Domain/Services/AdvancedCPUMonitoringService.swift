@@ -123,7 +123,19 @@ final class AdvancedCPUMonitoringService: CPUMonitoringServiceProtocol {
     }
 
     deinit {
-        stopMonitoring()
+        // Cancel monitoring task but skip process termination to avoid OSA prompt on app close
+        monitoringTask?.cancel()
+        monitoringTask = nil
+        
+        if let stopSignalURL = activeStopSignalURL {
+            fileManager.createFile(atPath: stopSignalURL.path, contents: Data())
+        }
+        
+        // Don't call terminateActivePowermetricsIfNeeded() - let OS clean up orphaned processes
+        activeStopSignalURL = nil
+        activeOutputURL = nil
+        activePIDURL = nil
+        activeWorkerPID = nil
     }
 
     private func startPrivilegedPowermetricsStream(
