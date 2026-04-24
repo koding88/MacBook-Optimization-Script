@@ -148,7 +148,7 @@ struct GPUSnapshotView: View {
                 )
 
                 ForEach(metrics.devices) { device in
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(device.name)
@@ -160,7 +160,7 @@ struct GPUSnapshotView: View {
                             statusBadge(title: "\(device.displayCount) \(localizer.text(.gpuSnapshotDisplays).lowercased())")
                         }
 
-                        capabilityGrid(device: device)
+                        capabilityCardGrid(device: device)
                     }
                     .padding(14)
                     .background(
@@ -174,14 +174,11 @@ struct GPUSnapshotView: View {
 
     private func gpuMetricsCard(metrics: GPUSnapshotMetrics) -> some View {
         sectionCard {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(localizer.text(.gpuSnapshotLiveTitle))
                             .font(.headline)
-                        Text(localizer.text(.gpuSnapshotAdvancedDescription))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 16)
@@ -194,26 +191,27 @@ struct GPUSnapshotView: View {
                     }
                 }
 
-                advancedStatusMessage
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        gpuMetricsColumn(metrics.gpuMetrics.metrics)
-                    }
-
-                    VStack(spacing: 12) {
-                        gpuMetricsColumn(metrics.gpuMetrics.metrics)
-                    }
-                }
-                .blur(radius: shouldBlurAdvancedContent ? advancedLoadingBlur : 0)
-                .allowsHitTesting(!shouldBlurAdvancedContent)
-                .overlay {
-                    if shouldBlurAdvancedContent {
-                        advancedWaitingOverlay
-                            .transition(.opacity)
+                if case .failed(let message) = viewModel.advancedState {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(localizer.text(.gpuSnapshotAdvancedFailed))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .animation(.easeInOut(duration: 0.24), value: shouldBlurAdvancedContent)
+
+                gpuMetricsGrid(metrics.gpuMetrics.metrics)
+                    .blur(radius: shouldBlurAdvancedContent ? advancedLoadingBlur : 0)
+                    .allowsHitTesting(!shouldBlurAdvancedContent)
+                    .overlay {
+                        if shouldBlurAdvancedContent {
+                            advancedWaitingOverlay
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.24), value: shouldBlurAdvancedContent)
             }
         }
     }
@@ -231,77 +229,140 @@ struct GPUSnapshotView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(metrics.displays) { display in
-                        HStack(alignment: .top, spacing: 14) {
-                            Image(systemName: display.isMain ? "display" : "display.2")
-                                .foregroundStyle(display.isOnline ? .blue : .secondary)
-                                .frame(width: 20)
+                    VStack(spacing: 10) {
+                        ForEach(metrics.displays) { display in
+                            HStack(alignment: .center, spacing: 12) {
+                                Image(systemName: display.isMain ? "display" : "display.2")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(display.isOnline ? .blue : .secondary)
+                                    .frame(width: 24)
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(display.name)
-                                    .font(.headline)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    if let resolution = display.resolution {
-                                        Text(resolution)
-                                    }
-                                    if let refreshRate = display.refreshRate {
-                                        Text(refreshRate)
-                                    }
-                                    if let scaleDescription = display.scaleDescription {
-                                        Text(scaleDescription)
-                                    }
-                                    if let colorDepth = display.colorDepth {
-                                        Text(colorDepth)
-                                    }
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(display.name)
+                                        .font(.subheadline.weight(.semibold))
+                                    
+                                    Text(compactDisplayInfo(display))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            }
 
-                            Spacer()
+                                Spacer()
 
-                            VStack(alignment: .trailing, spacing: 4) {
-                                statusBadge(title: display.isOnline ? localizer.text(.gpuSnapshotDisplayOnline) : localizer.text(.gpuSnapshotDisplayOffline))
-                                if display.isMain {
-                                    statusBadge(title: localizer.text(.gpuSnapshotDisplayMain))
-                                }
-                                if display.supportsHDR == true {
-                                    statusBadge(title: localizer.text(.gpuSnapshotDisplayHDR))
-                                }
-                                if display.supportsProMotion == true {
-                                    statusBadge(title: localizer.text(.gpuSnapshotDisplayProMotion))
+                                HStack(spacing: 6) {
+                                    if display.isMain {
+                                        primaryBadge(title: localizer.text(.gpuSnapshotDisplayMain))
+                                    }
+                                    if display.supportsHDR == true {
+                                        secondaryBadge(title: localizer.text(.gpuSnapshotDisplayHDR))
+                                    }
+                                    if display.supportsProMotion == true {
+                                        secondaryBadge(title: localizer.text(.gpuSnapshotDisplayProMotion))
+                                    }
                                 }
                             }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 6)
                     }
                 }
             }
         }
     }
-
-    private func capabilityGrid(device: GPUSnapshotMetrics.DeviceSummary) -> some View {
-        VStack(spacing: 12) {
-            capabilityRow(localizer.text(.gpuSnapshotMetalSupport), device.metalSupport ?? localizer.text(.unavailable))
-            capabilityRow(localizer.text(.gpuSnapshotUnifiedMemory), boolText(device.hasUnifiedMemory))
-            capabilityRow(localizer.text(.gpuSnapshotWorkingSet), device.recommendedMaxWorkingSetSizeBytes.map(GPUSnapshotFormatting.byteString) ?? localizer.text(.unavailable))
-            capabilityRow(localizer.text(.gpuSnapshotFamilies), device.supportedFamilies.isEmpty ? localizer.text(.unavailable) : device.supportedFamilies.joined(separator: ", "))
+    
+    private func compactDisplayInfo(_ display: GPUSnapshotMetrics.DisplaySummary) -> String {
+        var parts: [String] = []
+        
+        if let resolution = display.resolution {
+            parts.append(resolution)
         }
+        if let refreshRate = display.refreshRate {
+            parts.append(refreshRate)
+        }
+        if let scaleDescription = display.scaleDescription {
+            parts.append(scaleDescription)
+        }
+        
+        return parts.joined(separator: " • ")
+    }
+    
+    private func primaryBadge(title: String) -> some View {
+        Text(title)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.blue.opacity(0.15)))
+            .foregroundStyle(.blue)
+    }
+    
+    private func secondaryBadge(title: String) -> some View {
+        Text(title)
+            .font(.caption2.weight(.medium))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Color.secondary.opacity(0.08)))
+            .foregroundStyle(.secondary)
     }
 
-    private func capabilityRow(_ title: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 190, alignment: .leading)
-
-            Text(value)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-
-            Spacer(minLength: 0)
+    private func capabilityCardGrid(device: GPUSnapshotMetrics.DeviceSummary) -> some View {
+        let columns = [
+            GridItem(.flexible(), spacing: 10),
+            GridItem(.flexible(), spacing: 10)
+        ]
+        
+        return LazyVGrid(columns: columns, spacing: 10) {
+            capabilityCard(
+                icon: "cpu.fill",
+                title: localizer.text(.gpuSnapshotMetalSupport),
+                value: device.metalSupport ?? localizer.text(.unavailable),
+                color: .blue
+            )
+            
+            capabilityCard(
+                icon: "memorychip.fill",
+                title: localizer.text(.gpuSnapshotUnifiedMemory),
+                value: boolText(device.hasUnifiedMemory),
+                color: .teal
+            )
+            
+            capabilityCard(
+                icon: "square.stack.3d.up.fill",
+                title: localizer.text(.gpuSnapshotWorkingSet),
+                value: device.recommendedMaxWorkingSetSizeBytes.map(GPUSnapshotFormatting.byteString) ?? localizer.text(.unavailable),
+                color: .purple
+            )
+            
+            capabilityCard(
+                icon: "square.grid.3x3.fill",
+                title: localizer.text(.gpuSnapshotFamilies),
+                value: device.supportedFamilies.isEmpty ? localizer.text(.unavailable) : "\(device.supportedFamilies.count) families",
+                color: .orange
+            )
         }
+    }
+    
+    private func capabilityCard(icon: String, title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(color)
+                    .frame(width: 16)
+                
+                Text(title)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(color.opacity(0.08))
+        )
     }
 
     private func metricValueCard(_ title: String, value: String) -> some View {
@@ -312,24 +373,6 @@ struct GPUSnapshotView: View {
             Text(value)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.03))
-        )
-    }
-
-    private func metricWaitingCard(_ title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(detail)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -357,18 +400,6 @@ struct GPUSnapshotView: View {
     private func milliwattsText(_ value: Int?) -> String {
         guard let value else { return "—" }
         return "\(value) mW"
-    }
-
-    private func compactMetricLine(title: String, value: String) -> some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-            Spacer(minLength: 0)
-        }
     }
 
     private func statusBadge(title: String) -> some View {
@@ -400,27 +431,6 @@ struct GPUSnapshotView: View {
             .foregroundStyle(.secondary)
     }
 
-    private var advancedStatusText: String {
-        if let detail = displayMetrics?.gpuMetrics.detail {
-            return advancedStatusText(for: detail)
-        }
-
-        switch viewModel.advancedState {
-        case .idle:
-            return localizer.text(.gpuSnapshotAdvancedIdle)
-        case .requestingAuthorization:
-            return localizer.text(.gpuSnapshotAdvancedRequestingAuthorization)
-        case .running:
-            return viewModel.isWaitingForFirstAdvancedSample
-                ? localizer.text(.gpuSnapshotAdvancedWaitingForFirstSample)
-                : localizer.text(.gpuSnapshotCollecting)
-        case .denied:
-            return localizer.text(.gpuSnapshotAdvancedDenied)
-        case .failed(let message):
-            return message
-        }
-    }
-
     private func advancedStatusText(for detail: String) -> String {
         switch detail {
         case "requestingAuthorization":
@@ -436,13 +446,102 @@ struct GPUSnapshotView: View {
 }
 
 private extension GPUSnapshotView {
-    func gpuMetricsColumn(_ metrics: GPUMetrics?) -> some View {
-        VStack(spacing: 12) {
-            metricValueCard(localizer.text(.gpuSnapshotTelemetryUsageTitle), value: percentText(metrics?.usagePercent))
-            metricValueCard(localizer.text(.gpuSnapshotTelemetryFrequencyTitle), value: megahertzText(metrics?.frequencyMHz))
-            metricValueCard(localizer.text(.gpuSnapshotTelemetryPowerTitle), value: milliwattsText(metrics?.powerMilliwatts))
+    func gpuMetricsGrid(_ metrics: GPUMetrics?) -> some View {
+        let columns = [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12)
+        ]
+        
+        return LazyVGrid(columns: columns, spacing: 12) {
+            metricCardWithBar(
+                title: localizer.text(.gpuSnapshotTelemetryUsageTitle),
+                value: percentText(metrics?.usagePercent),
+                progress: (metrics?.usagePercent ?? 0) / 100,
+                color: usageColor(metrics?.usagePercent ?? 0)
+            )
+            
+            metricCardWithScale(
+                title: localizer.text(.gpuSnapshotTelemetryFrequencyTitle),
+                value: megahertzText(metrics?.frequencyMHz),
+                color: .blue
+            )
+            
+            metricCardWithScale(
+                title: localizer.text(.gpuSnapshotTelemetryPowerTitle),
+                value: milliwattsText(metrics?.powerMilliwatts),
+                color: .orange
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .top)
+    }
+    
+    func metricCardWithBar(title: String, value: String, progress: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(color)
+            }
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(color.opacity(0.12))
+                    
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(color.opacity(0.75))
+                        .frame(width: geometry.size.width * max(0, min(progress, 1)))
+                }
+            }
+            .frame(height: 8)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
+    }
+    
+    func metricCardWithScale(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(color)
+            }
+            
+            HStack(spacing: 4) {
+                ForEach(0..<5) { index in
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(color.opacity(0.15 + Double(index) * 0.15))
+                        .frame(height: 8)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: miniCardCornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
+    }
+    
+    func usageColor(_ usage: Double) -> Color {
+        if usage < 50 { return .green }
+        if usage < 75 { return .yellow }
+        return .orange
     }
 
     func sectionHeader(title: String, subtitle: String) -> some View {
@@ -510,19 +609,9 @@ private extension GPUSnapshotView {
         Group {
             switch viewModel.advancedState {
             case .failed:
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(localizer.text(.gpuSnapshotAdvancedFailed))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.red)
-                    Text(advancedStatusText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                EmptyView()
             default:
-                Text(advancedStatusText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                EmptyView()
             }
         }
     }

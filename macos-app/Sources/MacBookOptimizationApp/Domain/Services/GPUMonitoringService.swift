@@ -128,12 +128,14 @@ final class AdvancedGPUMonitoringService: GPUMonitoringServiceProtocol {
         monitoringTask?.cancel()
         monitoringTask = nil
 
+        // Signal stop via file - powermetrics worker will exit gracefully
         if let stopSignalURL = activeStopSignalURL {
             fileManager.createFile(atPath: stopSignalURL.path, contents: Data())
         }
 
+        // Don't call terminatePowermetricsIfNeeded() - avoid OSA prompt on app close
+        // Worker checks stop signal every iteration and exits cleanly
         if let pidURL = activePIDURL {
-            terminatePowermetricsIfNeeded(from: pidURL)
             try? fileManager.removeItem(at: pidURL)
         }
 

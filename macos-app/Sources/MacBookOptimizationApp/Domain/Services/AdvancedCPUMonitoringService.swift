@@ -110,12 +110,13 @@ final class AdvancedCPUMonitoringService: CPUMonitoringServiceProtocol {
         monitoringTask?.cancel()
         monitoringTask = nil
 
+        // Signal stop via file - powermetrics worker will exit gracefully
         if let stopSignalURL = activeStopSignalURL {
             fileManager.createFile(atPath: stopSignalURL.path, contents: Data())
         }
 
-        terminateActivePowermetricsIfNeeded(reason: "stop requested")
-
+        // Don't call terminateActivePowermetricsIfNeeded() - avoid OSA prompt on app close
+        // Worker checks stop signal every iteration and exits cleanly
         activeStopSignalURL = nil
         activeOutputURL = nil
         activePIDURL = nil
