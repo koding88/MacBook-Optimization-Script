@@ -7,9 +7,43 @@ struct CPUSnapshotView: View {
 
     private let cardCornerRadius: CGFloat = 12
     private let meterHeight: CGFloat = 12
+    private let overallChartHeight: CGFloat = 170
+    private let advancedLoadingBlur: CGFloat = 5.5
 
     private var localizer: AppLocalizer {
         AppLocalizer(language: dashboardModel.settings.language)
+    }
+
+    private var displayBasicMetrics: BasicCPUMetrics {
+        viewModel.basicMetrics ?? placeholderBasicMetrics
+    }
+
+    private var displayAdvancedMetrics: CPUMetrics {
+        viewModel.advancedMetrics ?? placeholderAdvancedMetrics
+    }
+
+    private var displayCPUUsageChartData: [(Date, Double)] {
+        let data = viewModel.cpuUsageChartData
+        return data.isEmpty ? placeholderCPUUsageChartData : data
+    }
+
+    private var shouldBlurAdvancedContent: Bool {
+        viewModel.advancedMetrics == nil
+    }
+
+    private var advancedOverlayTitle: String {
+        switch viewModel.advancedState {
+        case .idle:
+            return localizer.text(.cpuSnapshotAdvancedIdle)
+        case .requestingAuthorization:
+            return localizer.text(.cpuSnapshotAdvancedRequestingAuthorization)
+        case .running:
+            return localizer.text(.cpuSnapshotCollecting)
+        case .denied:
+            return localizer.text(.cpuSnapshotAdvancedDenied)
+        case .failed(let message):
+            return message
+        }
     }
 
     private var overallChartIdentity: String {
@@ -21,14 +55,11 @@ struct CPUSnapshotView: View {
             VStack(spacing: 16) {
                 headerSection
 
-                if let basicMetrics = viewModel.basicMetrics {
-                    overallUsageSection(metrics: basicMetrics)
-                    advancedDiagnosticsSection
-                } else if viewModel.isMonitoring {
-                    ProgressView(localizer.text(.cpuSnapshotCollecting))
-                        .frame(maxWidth: .infinity, minHeight: 220)
+                if let error = viewModel.error {
+                    errorState(error)
                 } else {
-                    emptyStateView
+                    overallUsageSection(metrics: displayBasicMetrics)
+                    advancedDiagnosticsSection
                 }
             }
             .padding()
@@ -53,40 +84,42 @@ struct CPUSnapshotView: View {
                 Text(localizer.text(.cpuSnapshotTitle))
                     .font(.title2.weight(.semibold))
 
-                if let metrics = viewModel.basicMetrics {
-                    HStack(spacing: 8) {
-                        Text(metrics.cpuName)
-                        Text("•")
-                        Text("\(metrics.totalCores) \(localizer.text(.cpuSnapshotCores))")
-                        Text("•")
-                        Text("\(localizer.text(.cpuSnapshotThermal)): \(metrics.thermalState.displayName)")
-                            .foregroundStyle(thermalColor(metrics.thermalState))
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(headerCPUName)
+                    Text("•")
+                    Text(headerCoreCount)
+                    Text("•")
+                    Text("\(localizer.text(.cpuSnapshotThermal)): \(headerThermalText)")
+                        .foregroundStyle(viewModel.basicMetrics == nil ? .secondary : thermalColor(displayBasicMetrics.thermalState))
                 }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 16)
 
-            HStack(spacing: 8) {
-                Text("\(localizer.text(.cpuSnapshotAutoRefresh)):")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("\(localizer.text(.cpuSnapshotAutoRefresh)):")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                Picker(
-                    "",
-                    selection: Binding(
-                        get: { viewModel.refreshInterval },
-                        set: { viewModel.updateRefreshInterval($0) }
-                    )
-                ) {
-                    ForEach(CPUSnapshotViewModel.RefreshInterval.allCases) { interval in
-                        Text(localizer.text(interval.localizationKey)).tag(interval)
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { viewModel.refreshInterval },
+                            set: { viewModel.updateRefreshInterval($0) }
+                        )
+                    ) {
+                        ForEach(CPUSnapshotViewModel.RefreshInterval.allCases) { interval in
+                            Text(localizer.text(interval.localizationKey)).tag(interval)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
                 }
-                .pickerStyle(.menu)
-                .frame(width: 120)
+
+                headerStatusBadge
             }
         }
         .padding()
@@ -108,64 +141,57 @@ struct CPUSnapshotView: View {
                     HStack(spacing: 12) {
                         metricPill(
                             title: localizer.text(.cpuSnapshotThermal),
-                            value: metrics.thermalState.displayName,
-                            accent: thermalColor(metrics.thermalState)
+                            value: displayThermalState(metrics),
+                            accent: viewModel.basicMetrics == nil ? .secondary : thermalColor(metrics.thermalState)
                         )
 
                         metricPill(
                             title: localizer.text(.cpuSnapshotCores),
-                            value: "\(metrics.totalCores)",
+                            value: coreCountValue(metrics.totalCores),
                             accent: .blue
                         )
                     }
                 }
 
-                if viewModel.cpuUsageChartData.count >= 2 {
-                    Chart {
-                        ForEach(Array(viewModel.cpuUsageChartData.enumerated()), id: \.offset) { _, item in
-                            AreaMark(
-                                x: .value("Time", item.0),
-                                y: .value("Usage", item.1)
-                            )
-                            .interpolationMethod(.catmullRom)
-                            .foregroundStyle(Color.blue.opacity(0.14))
+                Chart {
+                    ForEach(Array(displayCPUUsageChartData.enumerated()), id: \.offset) { _, item in
+                        AreaMark(
+                            x: .value("Time", item.0),
+                            y: .value("Usage", item.1)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(Color.blue.opacity(viewModel.basicMetrics == nil ? 0.07 : 0.14))
 
-                            LineMark(
-                                x: .value("Time", item.0),
-                                y: .value("Usage", item.1)
-                            )
-                            .interpolationMethod(.catmullRom)
-                            .lineStyle(.init(lineWidth: 2.5, lineCap: .round))
-                            .foregroundStyle(Color.blue.opacity(0.78))
-                        }
+                        LineMark(
+                            x: .value("Time", item.0),
+                            y: .value("Usage", item.1)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(.init(lineWidth: 2.5, lineCap: .round))
+                        .foregroundStyle(Color.blue.opacity(viewModel.basicMetrics == nil ? 0.32 : 0.78))
                     }
-                    .chartYScale(domain: 0...100)
-                    .chartYAxis {
-                        AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.8))
-                                .foregroundStyle(Color.secondary.opacity(0.12))
-                            AxisValueLabel {
-                                if let intValue = value.as(Int.self) {
-                                    Text("\(intValue)%")
-                                }
+                }
+                .chartYScale(domain: 0...100)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.8))
+                            .foregroundStyle(Color.secondary.opacity(0.12))
+                        AxisValueLabel {
+                            if let intValue = value.as(Int.self) {
+                                Text("\(intValue)%")
                             }
                         }
                     }
-                    .chartXAxis {
-                        AxisMarks(values: .automatic(desiredCount: 4)) { value in
-                            AxisValueLabel(format: .dateTime.hour().minute())
-                        }
-                    }
-                    .frame(height: 170)
-                    .id(overallChartIdentity)
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.22), value: overallChartIdentity)
-                } else {
-                    Text(localizer.text(.cpuSnapshotCollectingData))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 170)
                 }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                        AxisValueLabel(format: .dateTime.hour().minute())
+                    }
+                }
+                .frame(height: overallChartHeight)
+                .id(overallChartIdentity)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.22), value: overallChartIdentity)
             }
         }
     }
@@ -192,43 +218,28 @@ struct CPUSnapshotView: View {
                     }
                 }
 
-                switch viewModel.advancedState {
-                case .idle:
-                    statusMessage(
-                        viewModel.hasAdvancedMetrics
-                            ? localizer.text(.cpuSnapshotAdvancedStopped)
-                            : localizer.text(.cpuSnapshotAdvancedIdle)
-                    )
-                case .requestingAuthorization:
-                    advancedLoadingState(localizer.text(.cpuSnapshotAdvancedRequestingAuthorization))
-                case .denied:
-                    statusMessage(localizer.text(.cpuSnapshotAdvancedDenied))
-                case .failed(let message):
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(localizer.text(.cpuSnapshotAdvancedFailed))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.red)
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                case .running:
-                    if let metrics = viewModel.advancedMetrics {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: 16) {
-                                diagnosticsLeftColumn(metrics: metrics)
-                                diagnosticsRightColumn(metrics: metrics)
-                            }
+                advancedStatusMessage
 
-                            VStack(spacing: 16) {
-                                diagnosticsLeftColumn(metrics: metrics)
-                                diagnosticsRightColumn(metrics: metrics)
-                            }
-                        }
-                    } else {
-                        advancedLoadingState(localizer.text(.cpuSnapshotCollecting))
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 16) {
+                        diagnosticsLeftColumn(metrics: displayAdvancedMetrics)
+                        diagnosticsRightColumn(metrics: displayAdvancedMetrics)
+                    }
+
+                    VStack(spacing: 16) {
+                        diagnosticsLeftColumn(metrics: displayAdvancedMetrics)
+                        diagnosticsRightColumn(metrics: displayAdvancedMetrics)
                     }
                 }
+                .blur(radius: shouldBlurAdvancedContent ? advancedLoadingBlur : 0)
+                .allowsHitTesting(!shouldBlurAdvancedContent)
+                .overlay {
+                    if shouldBlurAdvancedContent {
+                        advancedWaitingOverlay
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.24), value: shouldBlurAdvancedContent)
             }
         }
     }
@@ -276,17 +287,17 @@ struct CPUSnapshotView: View {
                     statChip(
                         title: localizer.text(.cpuSnapshotOverallUsage),
                         value: percentString(metrics.overallCPUUsage),
-                        note: localizer.text(.cpuSnapshotAdvancedLiveSample)
+                        note: viewModel.advancedMetrics == nil ? localizer.text(.memorySnapshotLoading) : localizer.text(.cpuSnapshotAdvancedLiveSample)
                     )
                     statChip(
                         title: localizer.text(.cpuSnapshotPowerConsumption),
                         value: wattsString(metrics.power.combined),
-                        note: localizer.text(.cpuSnapshotAdvancedPackageTotal)
+                        note: viewModel.advancedMetrics == nil ? "—" : localizer.text(.cpuSnapshotAdvancedPackageTotal)
                     )
                 }
 
                 VStack(spacing: 10) {
-                    ForEach(Array(viewModel.advancedInsights.enumerated()), id: \.offset) { _, insight in
+                    ForEach(Array(displayAdvancedInsights(metrics).enumerated()), id: \.offset) { _, insight in
                         insightRow(insight)
                     }
                 }
@@ -385,7 +396,7 @@ struct CPUSnapshotView: View {
                 let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
                 LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(metrics.cores) { core in
+                    ForEach(displayCores(metrics)) { core in
                         let intensity = frequencyIntensity(for: core.frequency)
 
                         VStack(alignment: .leading, spacing: 6) {
@@ -474,7 +485,7 @@ struct CPUSnapshotView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    if let cluster = viewModel.selectedFrequencyCluster {
+                    if let cluster = selectedFrequencyCluster(from: metrics) {
                         Chart {
                             ForEach(cluster.frequencyDistribution, id: \.frequency) { bucket in
                                 BarMark(
@@ -585,21 +596,26 @@ struct CPUSnapshotView: View {
         }
     }
 
-    private func advancedLoadingState(_ title: String) -> some View {
-        HStack {
-            Spacer()
-            ProgressView(title)
-                .controlSize(.regular)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, minHeight: 180)
-    }
-
     private func statusMessage(_ text: String) -> some View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func errorState(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(localizer.text(.statusFailed))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.red)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
     }
 
     private func chartEmptyState(_ text: String) -> some View {
@@ -713,30 +729,6 @@ struct CPUSnapshotView: View {
         .frame(height: meterHeight)
     }
 
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "cpu")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-
-            Text(localizer.text(.cpuSnapshotNotStarted))
-                .font(.headline)
-
-            Text(localizer.text(.cpuSnapshotClickToStart))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Button(localizer.text(.cpuSnapshotStartMonitoring)) {
-                viewModel.startMonitoring()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity, minHeight: 300)
-        .padding()
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-    }
-
     private var cardBackground: Color {
         Color(nsColor: .controlBackgroundColor)
     }
@@ -788,6 +780,182 @@ struct CPUSnapshotView: View {
 
     private func wattsString(_ milliwatts: Int) -> String {
         String(format: "%.2f W", Double(milliwatts) / 1000)
+    }
+
+    private var headerCPUName: String {
+        guard let metrics = viewModel.basicMetrics else {
+            return "—"
+        }
+        return metrics.cpuName
+    }
+
+    private var headerCoreCount: String {
+        guard let metrics = viewModel.basicMetrics else {
+            return "0 \(localizer.text(.cpuSnapshotCores))"
+        }
+        return "\(metrics.totalCores) \(localizer.text(.cpuSnapshotCores))"
+    }
+
+    private var headerThermalText: String {
+        guard let metrics = viewModel.basicMetrics else {
+            return localizer.text(.memorySnapshotLoading)
+        }
+        return metrics.thermalState.displayName
+    }
+
+    private var headerStatusBadge: some View {
+        Group {
+            if viewModel.basicMetrics == nil {
+                statusCapsule(localizer.text(.memorySnapshotLoading))
+            } else if viewModel.monitoringState == .paused {
+                statusCapsule(localizer.text(.commonPaused))
+            } else {
+                statusCapsule(localizer.text(.commonLive))
+            }
+        }
+    }
+
+    private var advancedStatusMessage: some View {
+        Group {
+            switch viewModel.advancedState {
+            case .failed:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(localizer.text(.cpuSnapshotAdvancedFailed))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.red)
+                    Text(advancedOverlayTitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            default:
+                statusMessage(advancedOverlayTitle)
+            }
+        }
+    }
+
+    private var advancedWaitingOverlay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.42))
+
+            VStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(advancedOverlayTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 280)
+            }
+            .padding(18)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private func statusCapsule(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.primary.opacity(0.055), in: Capsule())
+    }
+
+    private func displayThermalState(_ metrics: BasicCPUMetrics) -> String {
+        viewModel.basicMetrics == nil ? "—" : metrics.thermalState.displayName
+    }
+
+    private func coreCountValue(_ totalCores: Int) -> String {
+        viewModel.basicMetrics == nil ? "0" : "\(totalCores)"
+    }
+
+    private var placeholderBasicMetrics: BasicCPUMetrics {
+        BasicCPUMetrics(
+            timestamp: .now,
+            cpuName: "—",
+            totalCores: 0,
+            overallUsage: 0,
+            thermalState: .sleeping
+        )
+    }
+
+    private var placeholderAdvancedMetrics: CPUMetrics {
+        let clusters = [
+            CPUMetrics.ClusterMetrics(
+                id: "placeholder-e",
+                name: "E-Cluster",
+                online: 0,
+                activeFrequency: 0,
+                activeResidency: 0,
+                idleResidency: 0,
+                downResidency: 100,
+                frequencyDistribution: placeholderFrequencyDistribution
+            ),
+            CPUMetrics.ClusterMetrics(
+                id: "placeholder-p0",
+                name: "P0-Cluster",
+                online: 0,
+                activeFrequency: 0,
+                activeResidency: 0,
+                idleResidency: 0,
+                downResidency: 100,
+                frequencyDistribution: placeholderFrequencyDistribution
+            )
+        ]
+
+        let cores = (0..<8).map {
+            CPUMetrics.CoreMetrics(id: $0, frequency: 0, activeResidency: 0, idleResidency: 0, downResidency: 100)
+        }
+
+        return CPUMetrics(
+            timestamp: .now,
+            cpuName: "—",
+            totalCores: cores.count,
+            thermalPressure: .sleeping,
+            clusters: clusters,
+            cores: cores,
+            power: .init(cpu: 0, gpu: 0, ane: 0)
+        )
+    }
+
+    private var placeholderCPUUsageChartData: [(Date, Double)] {
+        let now = Date()
+        return stride(from: 4, through: 0, by: -1).map { step in
+            (now.addingTimeInterval(TimeInterval(-step * 15)), 0)
+        }
+    }
+
+    private var placeholderFrequencyDistribution: [CPUMetrics.ClusterMetrics.FrequencyBucket] {
+        [
+            .init(frequency: 0, percentage: 0),
+            .init(frequency: 1000, percentage: 0),
+            .init(frequency: 2000, percentage: 0),
+            .init(frequency: 3000, percentage: 0)
+        ]
+    }
+
+    private func displayAdvancedInsights(_ metrics: CPUMetrics) -> [CPUSnapshotViewModel.AdvancedInsight] {
+        if viewModel.advancedMetrics != nil {
+            return viewModel.advancedInsights
+        }
+
+        return [
+            .init(title: "Most active cluster", value: "0%", detail: "—"),
+            .init(title: "Peak core", value: "0.00 GHz", detail: "—"),
+            .init(title: "Power draw", value: "0.00 W", detail: "—")
+        ]
+    }
+
+    private func displayCores(_ metrics: CPUMetrics) -> [CPUMetrics.CoreMetrics] {
+        metrics.cores.isEmpty ? placeholderAdvancedMetrics.cores : metrics.cores
+    }
+
+    private func selectedFrequencyCluster(from metrics: CPUMetrics) -> CPUMetrics.ClusterMetrics? {
+        if viewModel.advancedMetrics != nil {
+            return viewModel.selectedFrequencyCluster
+        }
+
+        return metrics.clusters.first
     }
 
     private struct BarSegment {
