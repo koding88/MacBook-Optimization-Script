@@ -18,6 +18,9 @@ enum SystemCommandExecutorError: LocalizedError {
 }
 
 final class SystemCommandExecutor: SystemCommandExecuting {
+    static let regularShellExecutablePath = "/bin/sh"
+    static let administratorShellExecutablePath = "/bin/sh"
+
     private let authService: AuthorizationService
     
     init(authService: AuthorizationService = .shared) {
@@ -33,7 +36,7 @@ final class SystemCommandExecutor: SystemCommandExecuting {
 
     private func executeRegular(_ command: String) async throws -> CommandExecutionResult {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.executableURL = URL(fileURLWithPath: Self.regularShellExecutablePath)
         process.arguments = Self.regularShellArguments(for: command)
 
         let pipe = Pipe()
@@ -52,7 +55,7 @@ final class SystemCommandExecutor: SystemCommandExecuting {
         // Use shared authorization service - no password prompt after first time
         do {
             let output = try await authService.executeWithPrivileges(
-                command: "/bin/zsh",
+                command: Self.administratorShellExecutablePath,
                 arguments: ["-c", command]
             )
             return CommandExecutionResult(output: output, exitCode: 0)
@@ -71,6 +74,6 @@ final class SystemCommandExecutor: SystemCommandExecuting {
     }
 
     static func regularShellArguments(for command: String) -> [String] {
-        ["-f", "-c", command]
+        ["-c", command]
     }
 }

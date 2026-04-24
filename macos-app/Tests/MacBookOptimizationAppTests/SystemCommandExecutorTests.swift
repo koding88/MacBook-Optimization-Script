@@ -2,10 +2,18 @@ import XCTest
 @testable import MacBookOptimizationApp
 
 final class SystemCommandExecutorTests: XCTestCase {
+    func testRegularShellExecutableUsesBinSh() {
+        XCTAssertEqual(SystemCommandExecutor.regularShellExecutablePath, "/bin/sh")
+    }
+
+    func testAdministratorShellExecutableUsesBinSh() {
+        XCTAssertEqual(SystemCommandExecutor.administratorShellExecutablePath, "/bin/sh")
+    }
+
     func testRegularShellArgumentsSkipUserStartupFiles() {
         XCTAssertEqual(
             SystemCommandExecutor.regularShellArguments(for: "echo ok"),
-            ["-f", "-c", "echo ok"]
+            ["-c", "echo ok"]
         )
     }
 

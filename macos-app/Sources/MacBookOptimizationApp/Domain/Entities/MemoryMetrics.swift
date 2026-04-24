@@ -153,7 +153,7 @@ struct MemoryMetricsParser {
         return firstInteger(in: line.replacingOccurrences(of: prefix, with: ""))
     }
 
-    private static func parseSwapUsedBytes(in lines: [String]) -> Int64? {
+    static func parseSwapUsedBytes(in lines: [String]) -> Int64? {
         guard let line = lines.first(where: { $0.contains("vm.swapusage:") }) else { return nil }
         let pattern = #"used\s*=\s*([0-9.]+)([BKMGTP])"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {

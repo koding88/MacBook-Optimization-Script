@@ -6,15 +6,17 @@ protocol MemoryMonitoringServiceProtocol {
 }
 
 final class MemoryMonitoringService: MemoryMonitoringServiceProtocol {
+    private let snapshotCollector: MemorySnapshotCollecting
     private var monitoringTask: Task<Void, Never>?
+
+    init(snapshotCollector: MemorySnapshotCollecting = NativeMemorySnapshotCollector()) {
+        self.snapshotCollector = snapshotCollector
+    }
 
     func startMonitoring(interval: TimeInterval) async throws -> AsyncStream<MemoryMetrics> {
         stopMonitoring()
 
-        let initialOutput = try Self.executeSnapshotCommand()
-        guard let initialMetrics = MemoryMetricsParser.parse(initialOutput) else {
-            throw MemoryMonitoringError.parsingFailed
-        }
+        let initialMetrics = try snapshotCollector.collectSnapshot()
 
         return AsyncStream { continuation in
             continuation.yield(initialMetrics)
@@ -23,10 +25,8 @@ final class MemoryMonitoringService: MemoryMonitoringServiceProtocol {
                 while !Task.isCancelled {
                     do {
                         try await Task.sleep(nanoseconds: UInt64(max(interval, 1) * 1_000_000_000))
-                        let output = try Self.executeSnapshotCommand()
-                        if let metrics = MemoryMetricsParser.parse(output) {
-                            continuation.yield(metrics)
-                        }
+                        let metrics = try snapshotCollector.collectSnapshot()
+                        continuation.yield(metrics)
                     } catch {
                         if !Task.isCancelled {
                             print("Memory monitoring error: \(error)")
@@ -44,33 +44,12 @@ final class MemoryMonitoringService: MemoryMonitoringServiceProtocol {
         monitoringTask?.cancel()
         monitoringTask = nil
     }
-
-    static func executeSnapshotCommand() throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = SystemCommandExecutor.regularShellArguments(for: MemorySnapshotCommand.combinedCommand)
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(decoding: data, as: UTF8.self)
-
-        guard process.terminationStatus == 0 else {
-            throw MemoryMonitoringError.commandFailed(output)
-        }
-
-        return output
-    }
 }
 
 enum MemoryMonitoringError: LocalizedError {
     case commandFailed(String)
     case parsingFailed
+    case nativeCollectionFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -78,6 +57,8 @@ enum MemoryMonitoringError: LocalizedError {
             return output.isEmpty ? "Memory monitoring command failed." : output
         case .parsingFailed:
             return "Unable to parse memory metrics."
+        case .nativeCollectionFailed(let message):
+            return message
         }
     }
 }
