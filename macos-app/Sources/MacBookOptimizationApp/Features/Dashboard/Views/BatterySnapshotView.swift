@@ -1,4 +1,3 @@
-import Charts
 import SwiftUI
 
 struct BatterySnapshotChargerInfoContent {
@@ -19,6 +18,8 @@ struct BatterySnapshotChargerInfoContent {
 struct BatterySnapshotView: View {
     @ObservedObject var viewModel: BatterySnapshotViewModel
     @EnvironmentObject private var dashboardModel: OptimizationDashboardViewModel
+    @State private var previousMetrics: BatteryMetrics?
+    @State private var changedFields: Set<BatterySnapshotPresentation.ChangedField> = []
 
     private var localizer: AppLocalizer {
         AppLocalizer(language: dashboardModel.settings.language)
@@ -26,11 +27,11 @@ struct BatterySnapshotView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 headerSection
 
                 if let metrics = viewModel.currentMetrics {
-                    adaptiveOverview(metrics: metrics)
+                    metricsStack(metrics: metrics)
                 } else if let error = viewModel.error {
                     errorState(error: error)
                 } else if viewModel.isMonitoring {
@@ -58,19 +59,50 @@ struct BatterySnapshotView: View {
                 viewModel.pauseMonitoring()
             }
         }
+        .onChange(of: viewModel.currentMetrics) { metrics in
+            guard let metrics else { return }
+            let updatedFields = BatterySnapshotPresentation.changedFields(from: previousMetrics, to: metrics)
+            previousMetrics = metrics
+
+            withAnimation(.easeInOut(duration: 0.24)) {
+                changedFields = updatedFields
+            }
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(900))
+                withAnimation(.easeOut(duration: 0.45)) {
+                    changedFields.subtract(updatedFields)
+                }
+            }
+        }
     }
 
     private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(localizer.text(.batterySnapshotTitle))
                     .font(.title2)
-                    .fontWeight(.semibold)
+                .fontWeight(.semibold)
 
                 if let metrics = viewModel.currentMetrics {
                     Text("\(metrics.level)% • \(chargingStateText(metrics.chargingState))")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                }
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(viewModel.isMonitoring ? Color.green.opacity(0.85) : Color.secondary.opacity(0.6))
+                        .frame(width: 6, height: 6)
+
+                    Text(
+                        BatterySnapshotPresentation.lastUpdatedText(
+                            updatedAt: viewModel.currentMetrics?.timestamp,
+                            localizer: localizer
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
 
@@ -85,7 +117,7 @@ struct BatterySnapshotView: View {
                 }
 
                 Text("\(localizer.text(.batterySnapshotAutoRefresh)):")
-                    .font(.subheadline)
+                    .font(.callout)
                     .foregroundColor(.secondary)
 
                 Picker(
@@ -103,86 +135,121 @@ struct BatterySnapshotView: View {
                 .frame(width: 120)
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(cardBackground)
+        .overlay(cardBorder)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    @ViewBuilder
-    private func adaptiveOverview(metrics: BatteryMetrics) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 16) {
-                statusCard(metrics: metrics)
-                healthCard(metrics: metrics)
-                chargerCard(metrics: metrics)
-                batteryDetailsCard(metrics: metrics)
-            }
-
-            VStack(spacing: 16) {
-                statusCard(metrics: metrics)
-                healthCard(metrics: metrics)
-                chargerCard(metrics: metrics)
-                batteryDetailsCard(metrics: metrics)
-            }
+    private func metricsStack(metrics: BatteryMetrics) -> some View {
+        VStack(spacing: 10) {
+            statusCard(metrics: metrics)
+            healthCard(metrics: metrics)
+            chargerCard(metrics: metrics)
+            batteryDetailsCard(metrics: metrics)
         }
     }
 
     private func statusCard(metrics: BatteryMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(localizer.text(.batterySnapshotLevel))
-                .font(.headline)
+        snapshotCard {
+            cardTitle(localizer.text(.batterySnapshotLevel))
+
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Image(systemName: batteryIcon(level: metrics.level, isCharging: metrics.isCharging))
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(batteryLevelColor(metrics.level).opacity(0.9))
+
+                Text("\(metrics.level)%")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .modifier(ValuePulseModifier(isActive: changedFields.contains(.level)))
+
+                Divider()
+                    .frame(height: 16)
+
+                Text(chargingStateText(metrics.chargingState))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(chargingStateColor(metrics.chargingState))
+                    .modifier(ValuePulseModifier(isActive: changedFields.contains(.chargingState)))
+
+                Spacer(minLength: 0)
+
+                Text(powerSourceText(metrics.powerSource))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .modifier(ValuePulseModifier(isActive: changedFields.contains(.powerSource)))
+            }
+
+            insightText(
+                BatterySnapshotPresentation.levelInsight(metrics: metrics, localizer: localizer)
+            )
 
             batteryLevelGauge(metrics: metrics)
 
-            VStack(spacing: 10) {
-                statusRow(
+            HStack(spacing: 14) {
+                compactMetric(
                     icon: powerSourceIcon(metrics.powerSource),
                     title: localizer.text(.batterySnapshotPowerSource),
-                    value: powerSourceText(metrics.powerSource)
+                    value: powerSourceText(metrics.powerSource),
+                    valueColor: .primary,
+                    iconColor: powerSourceColor(metrics.powerSource)
                 )
-                statusRow(
+
+                Divider()
+                    .frame(height: 18)
+
+                compactMetric(
                     icon: chargingStateIcon(metrics.chargingState),
                     title: localizer.text(.batterySnapshotChargingState),
-                    value: chargingStateText(metrics.chargingState)
+                    value: chargingStateText(metrics.chargingState),
+                    valueColor: .primary,
+                    iconColor: chargingStateColor(metrics.chargingState)
                 )
+
+                Spacer(minLength: 0)
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .help(BatterySnapshotPresentation.levelInsight(metrics: metrics, localizer: localizer))
+        .batteryCardPresentation(
+            highlight: changedFields.contains(.level) || changedFields.contains(.powerSource) || changedFields.contains(.chargingState)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func healthCard(metrics: BatteryMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(localizer.text(.batterySnapshotHealth))
-                    .font(.headline)
+        snapshotCard {
+            HStack(alignment: .top, spacing: 12) {
+                cardTitle(localizer.text(.batterySnapshotHealth))
 
                 Spacer()
 
-                Text(conditionText(metrics.condition))
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(conditionColor(metrics.condition).opacity(0.12), in: Capsule())
-                    .foregroundStyle(conditionColor(metrics.condition))
-            }
-
-            VStack(spacing: 10) {
-                healthRow(
-                    title: localizer.text(.batterySnapshotCycleCount),
-                    value: "\(metrics.cycleCount)"
+                statusCapsule(
+                    text: conditionText(metrics.condition),
+                    color: conditionColor(metrics.condition)
                 )
             }
+
+            insightText(
+                BatterySnapshotPresentation.healthInsight(metrics: metrics, localizer: localizer)
+            )
 
             if let health = metrics.healthPercentage {
                 healthCapacitySection(metrics: metrics, health: health)
             }
+
+            compactMetric(
+                icon: "repeat",
+                title: localizer.text(.batterySnapshotCycleCount),
+                value: "\(metrics.cycleCount)",
+                valueColor: .primary,
+                iconColor: conditionColor(metrics.condition)
+            )
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .help(localizer.text(.batterySnapshotHelpBatteryHealth))
+        .batteryCardPresentation(
+            highlight: changedFields.contains(.health)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -192,40 +259,51 @@ struct BatterySnapshotView: View {
             unavailableText: localizer.text(.unavailable)
         )
 
-        return VStack(alignment: .leading, spacing: 12) {
-            Text(localizer.text(.batterySnapshotChargerInfo))
-                .font(.headline)
-            
-            VStack(spacing: 10) {
-                detailRow(
+        return snapshotCard {
+            cardTitle(localizer.text(.batterySnapshotChargerInfo))
+
+            insightText(
+                BatterySnapshotPresentation.chargerInsight(metrics: metrics, localizer: localizer)
+            )
+
+            HStack(alignment: .top, spacing: 18) {
+                compactMetric(
                     icon: "bolt.fill",
                     title: localizer.text(.batterySnapshotChargerWattage),
-                    value: content.wattageText
+                    value: content.wattageText,
+                    valueColor: .primary,
+                    iconColor: .orange
                 )
 
-                detailRow(
+                Divider()
+                    .frame(height: 18)
+
+                compactMetric(
                     icon: "powerplug.fill",
                     title: localizer.text(.batterySnapshotAdapterName),
-                    value: content.adapterNameText
+                    value: content.adapterNameText,
+                    valueColor: .primary,
+                    iconColor: .blue
                 )
+
+                Spacer(minLength: 0)
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .help(localizer.text(.batterySnapshotHelpCharger))
+        .batteryCardPresentation(
+            highlight: changedFields.contains(.charger)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func healthCapacitySection(metrics: BatteryMetrics, health: Double) -> some View {
-        VStack(spacing: 16) {
-            capacityProgressCard(
-                title: "Sức khỏe pin",
-                value: capacityHealthDescription(metrics: metrics, health: health),
-                progress: health / 100.0,
-                progressLabel: String(format: "%.1f%%", health),
-                tint: healthColor(health)
-            )
-        }
+        capacityProgressCard(
+            title: localizer.text(.batterySnapshotCapacityDetails),
+            value: capacityHealthDescription(metrics: metrics, health: health),
+            progress: health / 100.0,
+            progressLabel: String(format: "%.1f%%", health),
+            tint: healthColor(health)
+        )
     }
 
     private func capacityProgressCard(
@@ -235,240 +313,121 @@ struct BatterySnapshotView: View {
         progressLabel: String,
         tint: Color
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(.body)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Spacer(minLength: 12)
 
-                Text(value)
-                    .font(.body.weight(.semibold))
+                Text(progressLabel)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(tint.opacity(0.85))
+                    .modifier(ValuePulseModifier(isActive: changedFields.contains(.health)))
             }
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.gray.opacity(0.14))
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
 
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(tint)
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(tint.opacity(0.26))
                         .frame(width: geometry.size.width * CGFloat(max(0, min(progress, 1))))
-
-                    Text(progressLabel)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.black.opacity(0.85))
-                        .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 30)
+            .frame(height: 7)
+            .animation(.easeInOut(duration: 0.45), value: progress)
+
+            Text(value)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 4)
     }
 
     private func batteryDetailsCard(metrics: BatteryMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(localizer.text(.batterySnapshotBatteryDetails))
-                .font(.headline)
-            
-            VStack(spacing: 10) {
-                temperatureRow(temperature: metrics.temperature)
-                manufactureDateRow(date: metrics.manufactureDate)
-                serialNumberRow(serialNumber: metrics.serialNumber)
-                lowPowerModeRow(isEnabled: metrics.isLowPowerModeEnabled)
+        snapshotCard {
+            cardTitle(localizer.text(.batterySnapshotBatteryDetails))
+
+            insightText(
+                BatterySnapshotPresentation.detailInsight(metrics: metrics, localizer: localizer)
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                temperatureHighlightRow(temperature: metrics.temperature)
+
+                detailRow(
+                    icon: "leaf.fill",
+                    title: localizer.text(.batterySnapshotLowPowerMode),
+                    value: lowPowerModeText(metrics.isLowPowerModeEnabled),
+                    valueColor: lowPowerModeColor(metrics.isLowPowerModeEnabled),
+                    labelColor: .secondary,
+                    iconColor: lowPowerModeColor(metrics.isLowPowerModeEnabled)
+                )
+                metadataRow(
+                    icon: "calendar",
+                    title: localizer.text(.batterySnapshotManufactureDate),
+                    value: manufactureDateValue(metrics.manufactureDate)
+                )
+                metadataRow(
+                    icon: "number",
+                    title: localizer.text(.batterySnapshotSerialNumber),
+                    value: serialNumberValue(metrics.serialNumber),
+                    monospacedValue: metrics.serialNumber != nil
+                )
             }
         }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        .help(localizer.text(.batterySnapshotHelpTemperature))
+        .batteryCardPresentation(
+            highlight: changedFields.contains(.temperature) || changedFields.contains(.lowPowerMode)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
-    private func temperatureRow(temperature: Double?) -> some View {
-        HStack(spacing: 12) {
+
+    private func temperatureHighlightRow(temperature: Double?) -> some View {
+        HStack(spacing: 10) {
             Image(systemName: "thermometer")
-                .font(.body)
-                .foregroundStyle(temperature != nil ? temperatureColor(temperature!) : .secondary)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(temperature.map(temperatureColor) ?? .secondary)
                 .frame(width: 20)
-            
+
             Text(localizer.text(.batterySnapshotTemperature))
                 .font(.subheadline)
-            
+                .foregroundStyle(.secondary)
+
             Spacer()
-            
+
             if let temp = temperature {
                 Text(String(format: "%.1f°C", temp))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(temperatureColor(temp))
+                    .modifier(ValuePulseModifier(isActive: changedFields.contains(.temperature)))
             } else {
                 Text(localizer.text(.unavailable))
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
         }
-    }
-    
-    private func manufactureDateRow(date: Date?) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "calendar")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            
-            Text(localizer.text(.batterySnapshotManufactureDate))
-                .font(.subheadline)
-            
-            Spacer()
-            
-            if let manufactureDate = date {
-                Text(formatDate(manufactureDate))
-                    .font(.subheadline.weight(.semibold))
-            } else {
-                Text(localizer.text(.unavailable))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-    
-    private func serialNumberRow(serialNumber: String?) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "number")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            
-            Text(localizer.text(.batterySnapshotSerialNumber))
-                .font(.subheadline)
-            
-            Spacer()
-            
-            if let serial = serialNumber {
-                Text(serial)
-                    .font(.system(.subheadline, design: .monospaced).weight(.semibold))
-            } else {
-                Text(localizer.text(.unavailable))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-    
-    private func lowPowerModeRow(isEnabled: Bool?) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "leaf.fill")
-                .font(.body)
-                .foregroundStyle(lowPowerModeColor(isEnabled))
-                .frame(width: 20)
-            
-            Text(localizer.text(.batterySnapshotLowPowerMode))
-                .font(.subheadline)
-            
-            Spacer()
-            
-            Text(lowPowerModeText(isEnabled))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(lowPowerModeColor(isEnabled))
-        }
+        .padding(.vertical, 1)
     }
 
     private func batteryLevelGauge(metrics: BatteryMetrics) -> some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.gray.opacity(0.12))
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
 
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                batteryLevelColor(metrics.level).opacity(0.35),
-                                batteryLevelColor(metrics.level).opacity(0.85)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: geometry.size.width * CGFloat(metrics.level) / 100.0)
-
-                HStack {
-                    Image(systemName: batteryIcon(level: metrics.level, isCharging: metrics.isCharging))
-                        .foregroundStyle(batteryLevelColor(metrics.level))
-                        .font(.title2)
-
-                    Text("\(metrics.level)%")
-                        .font(.title.weight(.semibold))
-                        .foregroundStyle(.primary)
+                    Capsule(style: .continuous)
+                        .fill(batteryLevelColor(metrics.level).opacity(0.3))
+                        .frame(width: geometry.size.width * CGFloat(metrics.level) / 100.0)
                 }
-                .padding(.horizontal, 16)
             }
+            .frame(height: 10)
+            .animation(.easeInOut(duration: 0.45), value: metrics.level)
         }
-        .frame(height: 60)
-    }
-
-    private func healthIndicator(percentage: Double) -> some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.gray.opacity(0.12))
-
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(healthColor(percentage))
-                    .frame(width: geometry.size.width * CGFloat(percentage) / 100.0)
-
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(healthColor(percentage))
-                        .frame(width: 8, height: 8)
-                    Text(String(format: "%.1f%% \(localizer.text(.batterySnapshotHealthStatus))", percentage))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 10)
-            }
-        }
-        .frame(height: 28)
-    }
-
-    private func statusRow(icon: String, title: String, value: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-
-            Text(title)
-                .font(.subheadline)
-
-            Spacer()
-
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-        }
-    }
-
-    private func healthRow(title: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.body)
-
-            Spacer(minLength: 12)
-
-            Text(value)
-                .font(.body.weight(.semibold))
-        }
-    }
-
-    private func capacityRow(title: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.body)
-
-            Spacer(minLength: 12)
-
-            Text(value)
-                .font(.body.weight(.semibold))
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func capacityHealthDescription(metrics: BatteryMetrics, health: Double) -> String {
@@ -480,21 +439,132 @@ struct BatterySnapshotView: View {
         return "\(full) mAh / \(design) mAh"
     }
 
-    private func detailRow(icon: String, title: String, value: String) -> some View {
+    private func detailRow(
+        icon: String? = nil,
+        title: String,
+        value: String,
+        valueColor: Color = .primary,
+        labelColor: Color = .secondary,
+        iconColor: Color? = nil
+    ) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(iconColor ?? labelColor)
+                    .frame(width: 20)
+            }
 
             Text(title)
                 .font(.subheadline)
+                .foregroundStyle(labelColor)
 
             Spacer()
 
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(valueColor)
+                .multilineTextAlignment(.trailing)
         }
+    }
+
+    private func metadataRow(
+        icon: String,
+        title: String,
+        value: String,
+        monospacedValue: Bool = false
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary.opacity(0.8))
+                .frame(width: 20)
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Group {
+                if monospacedValue {
+                    Text(value)
+                        .font(.system(.footnote, design: .monospaced).weight(.medium))
+                } else {
+                    Text(value)
+                        .font(.subheadline.weight(.medium))
+                }
+            }
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func compactMetric(
+        icon: String,
+        title: String,
+        value: String,
+        valueColor: Color = .primary,
+        iconColor: Color = .secondary
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(iconColor)
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+        }
+    }
+
+    private func cardTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.headline)
+    }
+
+    private func snapshotCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            content()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
+        .overlay(cardBorder)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func statusCapsule(text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.1), in: Capsule())
+            .foregroundStyle(color.opacity(0.9))
+    }
+
+    private func insightText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func manufactureDateValue(_ date: Date?) -> String {
+        guard let date else { return localizer.text(.unavailable) }
+        return formatDate(date)
+    }
+
+    private func serialNumberValue(_ serialNumber: String?) -> String {
+        guard let serialNumber else { return localizer.text(.unavailable) }
+        return serialNumber
     }
 
     private func errorState(error: String) -> some View {
@@ -623,6 +693,30 @@ struct BatterySnapshotView: View {
             return .red
         }
     }
+
+    private func powerSourceColor(_ source: BatteryMetrics.PowerSource) -> Color {
+        switch source {
+        case .ac:
+            return .blue
+        case .battery:
+            return .green
+        case .unknown:
+            return .secondary
+        }
+    }
+
+    private func chargingStateColor(_ state: BatteryMetrics.ChargingState) -> Color {
+        switch state {
+        case .charging, .charged:
+            return .green
+        case .discharging:
+            return .orange
+        case .acAttached:
+            return .blue
+        case .unknown:
+            return .secondary
+        }
+    }
     
     private func temperatureColor(_ temp: Double) -> Color {
         if temp < 30 {
@@ -650,5 +744,47 @@ struct BatterySnapshotView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+}
+
+private struct ValuePulseModifier: ViewModifier {
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isActive ? 1.03 : 1.0)
+            .opacity(isActive ? 0.88 : 1.0)
+            .animation(.easeOut(duration: 0.35), value: isActive)
+    }
+}
+
+private struct BatteryCardPresentationModifier: ViewModifier {
+    let highlight: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(highlight ? Color.accentColor.opacity(0.18) : Color.clear, lineWidth: 1)
+            )
+            .animation(.easeInOut(duration: 0.3), value: highlight)
+    }
+}
+
+private extension View {
+    func batteryCardPresentation(highlight: Bool) -> some View {
+        modifier(BatteryCardPresentationModifier(highlight: highlight))
+    }
+}
+
+private extension BatterySnapshotView {
+    var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor))
+    }
+
+    var cardBorder: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
     }
 }
