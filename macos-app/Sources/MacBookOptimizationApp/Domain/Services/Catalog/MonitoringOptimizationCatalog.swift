@@ -67,14 +67,10 @@ extension OptimizationCatalog {
             CommandRequest(command: "printf 'CPU Cores: '; sysctl -n hw.ncpu", requiresAdministrator: false),
             CommandRequest(command: "top -l 1 | awk '/^CPU/ {print}'", requiresAdministrator: false)
         ]), status: .ready, lastRunDescription: nil),
-        OptimizationAction(id: "system_check_memory", titleKey: "action.system_check_memory.title", descriptionKey: "action.system_check_memory.description", category: .monitoring, symbolName: "memorychip.fill", statusFeatureID: nil, isRisky: false, estimatedTime: "5 seconds", requiresRestart: false, restoreBehavior: .notRestorableInspection(reasonKey: "restore.reason.inspection"), kind: .command([
-            CommandRequest(command: "printf 'Total RAM: '; sysctl -n hw.memsize | awk '{print $1 / 1024/1024/1024 \"GB\"}'", requiresAdministrator: false),
-            CommandRequest(command: "vm_stat", requiresAdministrator: false)
-        ]), status: .ready, lastRunDescription: nil),
-        OptimizationAction(id: "system_check_battery", titleKey: "action.system_check_battery.title", descriptionKey: "action.system_check_battery.description", category: .monitoring, symbolName: "battery.75percent", statusFeatureID: nil, isRisky: false, estimatedTime: "5 seconds", requiresRestart: false, restoreBehavior: .notRestorableInspection(reasonKey: "restore.reason.inspection"), kind: .command([
-            CommandRequest(command: "pmset -g batt", requiresAdministrator: false),
-            CommandRequest(command: "system_profiler SPPowerDataType | grep -E 'Cycle Count|Condition|Charge Remaining|Charging|Full Charge Capacity|Battery Installed'", requiresAdministrator: false)
-        ]), status: .ready, lastRunDescription: nil),
+        OptimizationAction(id: "system_check_memory", titleKey: "action.system_check_memory.title", descriptionKey: "action.system_check_memory.description", category: .monitoring, symbolName: "memorychip.fill", statusFeatureID: nil, isRisky: false, estimatedTime: "5 seconds", requiresRestart: false, restoreBehavior: .notRestorableInspection(reasonKey: "restore.reason.inspection"), kind: .command(MemorySnapshotCommand.requests), status: .ready, lastRunDescription: nil),
+        OptimizationAction(id: "system_check_battery", titleKey: "action.system_check_battery.title", descriptionKey: "action.system_check_battery.description", category: .monitoring, symbolName: "battery.75percent", statusFeatureID: nil, isRisky: false, estimatedTime: "Manual", requiresRestart: false, restoreBehavior: .notRestorableInspection(reasonKey: "restore.reason.inspection"), kind: .manual("""
+Use the Battery Snapshot panel to inspect battery level, charging state, health, charger details, temperature, serial number, and Low Power Mode from the app's native Swift battery collector.
+"""), status: .ready, lastRunDescription: nil),
         OptimizationAction(id: "system_check_gpu", titleKey: "action.system_check_gpu.title", descriptionKey: "action.system_check_gpu.description", category: .monitoring, symbolName: "display.2", statusFeatureID: nil, isRisky: false, estimatedTime: "5-10 seconds", requiresRestart: false, restoreBehavior: .notRestorableInspection(reasonKey: "restore.reason.inspection"), kind: .command([
             CommandRequest(command: "system_profiler SPDisplaysDataType | awk -F': ' '/Chipset Model/{print \"GPU Model: \"$2} /Metal Support/{print \"Metal Support: \"$2; exit}'", requiresAdministrator: false)
         ]), status: .ready, lastRunDescription: nil),

@@ -11,6 +11,17 @@ final class AppLocalizerTests: XCTestCase {
             .snapshotCPUCores,
             .snapshotMemoryFree,
             .snapshotMemoryCompressed,
+            .memorySnapshotTitle,
+            .memorySnapshotCollecting,
+            .memorySnapshotPressure,
+            .memorySnapshotPhysicalMemory,
+            .memorySnapshotMemoryUsed,
+            .memorySnapshotCachedFiles,
+            .memorySnapshotSwapUsed,
+            .memorySnapshotAppMemory,
+            .memorySnapshotWiredMemory,
+            .memorySnapshotCompressed,
+            .memorySnapshotFreeMemory,
             .snapshotGPUMetal,
             .snapshotDiskAvailable,
             .snapshotDiskMountPoint,
@@ -100,5 +111,17 @@ final class AppLocalizerTests: XCTestCase {
 
         XCTAssertEqual(englishPlan.steps.first?.title, "Disable delayed ACK")
         XCTAssertEqual(vietnamesePlan.steps.first?.title, "Tắt delayed ACK")
+    }
+
+    func testMemoryReviewPlanUsesLocalizedStepCopy() {
+        let english = AppLocalizer(language: .english)
+        let vietnamese = AppLocalizer(language: .vietnamese)
+        let action = try! XCTUnwrap(OptimizationCatalog.actions().first(where: { $0.id == "system_check_memory" }))
+
+        let englishPlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: english))
+        let vietnamesePlan = try! XCTUnwrap(SystemActionReviewPlan.build(for: action, localizer: vietnamese))
+
+        XCTAssertEqual(englishPlan.steps[1].title, "Read swap usage")
+        XCTAssertEqual(vietnamesePlan.steps[1].title, "Đọc mức dùng swap")
     }
 }

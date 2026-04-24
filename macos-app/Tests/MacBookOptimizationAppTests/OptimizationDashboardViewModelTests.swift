@@ -66,12 +66,12 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
 
         let model = makeModel(result: result)
         await model.run(actionID: "system_check_battery")
-        model.confirmSystemActionReview()
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertTrue(model.toasts.isEmpty)
+        XCTAssertNil(model.pendingSystemActionReview)
         XCTAssertEqual(model.presentedActionResult?.title, "Battery Snapshot")
-        XCTAssertEqual(model.presentedActionResult?.message, "This action finished successfully.")
+        XCTAssertEqual(model.presentedActionResult?.message, "Follow the guidance below to complete this action safely.")
     }
 
     @MainActor

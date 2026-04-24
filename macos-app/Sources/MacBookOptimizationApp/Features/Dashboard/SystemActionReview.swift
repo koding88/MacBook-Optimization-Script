@@ -204,8 +204,6 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
             return cpuSnapshotDescriptor(for: request.command, localizer: localizer)
         case "system_check_memory":
             return memorySnapshotDescriptor(for: request.command, localizer: localizer)
-        case "system_check_battery":
-            return batterySnapshotDescriptor(for: request.command, localizer: localizer)
         case "system_check_gpu":
             return gpuSnapshotDescriptor(for: request.command, localizer: localizer)
         case "system_check_disk":
@@ -631,23 +629,14 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
 
     private static func memorySnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
         switch command {
-        case "printf 'Total RAM: '; sysctl -n hw.memsize | awk '{print $1 / 1024/1024/1024 \"GB\"}'":
+        case "printf 'Total RAM Bytes: '; sysctl -n hw.memsize":
             return localized("system.review.monitoring.memory.totalRam", localizer: localizer)
+        case "printf '\\nSwap Usage:\\n'; sysctl vm.swapusage":
+            return localized("system.review.monitoring.memory.swapUsage", localizer: localizer)
         case "vm_stat":
             return localized("system.review.monitoring.memory.vmStat", localizer: localizer)
         default:
             return localized("system.review.monitoring.memory.fallback", localizer: localizer)
-        }
-    }
-
-    private static func batterySnapshotDescriptor(for command: String, localizer: AppLocalizer) -> (String, String) {
-        switch command {
-        case "pmset -g batt":
-            return localized("system.review.monitoring.battery.batteryStatus", localizer: localizer)
-        case "system_profiler SPPowerDataType | grep -E 'Cycle Count|Condition|Charge Remaining|Charging|Full Charge Capacity|Battery Installed'":
-            return localized("system.review.monitoring.battery.healthDetails", localizer: localizer)
-        default:
-            return localized("system.review.monitoring.battery.fallback", localizer: localizer)
         }
     }
 

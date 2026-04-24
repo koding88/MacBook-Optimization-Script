@@ -91,11 +91,15 @@ final class OptimizationDashboardViewModel: ObservableObject {
             symbolName: "checkmark.circle"
         )
     ]
+    @Published var cpuSnapshotViewModel: CPUSnapshotViewModel?
+    @Published var memorySnapshotViewModel: MemorySnapshotViewModel?
+    @Published var batterySnapshotViewModel: BatterySnapshotViewModel?
+    @Published var mdmSnapshotViewModel: MDMSnapshotViewModel?
 
     private let engine: OptimizationExecuting
     private let stateStore: StateStoreProtocol
     private let restoreBaselineStore: RestoreBaselineStoreProtocol
-    private let settings: AppSettingsStore
+    let settings: AppSettingsStore
     private let systemInfoProvider: SystemInfoProviding
     private let commandExecutor: SystemCommandExecuting
     private var cancellables: Set<AnyCancellable> = []
@@ -129,6 +133,12 @@ final class OptimizationDashboardViewModel: ObservableObject {
         self.actions = OptimizationCatalog.actions()
         loadStatusesFromDisk()
         setupBindings()
+        
+        // Initialize CPU snapshot view model once
+        self.cpuSnapshotViewModel = CPUSnapshotViewModel()
+        self.memorySnapshotViewModel = MemorySnapshotViewModel()
+        self.batterySnapshotViewModel = BatterySnapshotViewModel()
+        self.mdmSnapshotViewModel = MDMSnapshotViewModel(commandExecutor: commandExecutor)
 
         Task {
             await loadMachineSummary()
@@ -137,6 +147,8 @@ final class OptimizationDashboardViewModel: ObservableObject {
 
     deinit {
         refreshTask?.cancel()
+        // Note: Monitoring services will cleanup automatically when their tasks are cancelled
+        // No need to explicitly stop them here due to MainActor isolation
     }
 
     var selectedCategory: ActionCategory {

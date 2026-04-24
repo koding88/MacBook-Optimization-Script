@@ -181,6 +181,22 @@ final class OptimizationEngine: OptimizationExecuting {
     }
 
     private func memoryInspectionPresentation(output: String) -> InspectionPresentation? {
+        if let metrics = MemoryMetricsParser.parse(output) {
+            let primaryValue = "\(MemoryMetrics.format(bytes: metrics.usedBytes)) \(localizer.text(.commonOf)) \(MemoryMetrics.format(bytes: metrics.totalBytes)) \(localizer.text(.commonUsed))"
+
+            return InspectionPresentation(
+                summary: ActionResultSummary(
+                    primaryValue: primaryValue,
+                    secondaryValues: [
+                        .init(labelKey: .memorySnapshotCachedFiles, value: MemoryMetrics.format(bytes: metrics.cachedBytes)),
+                        .init(labelKey: .memorySnapshotCompressed, value: MemoryMetrics.format(bytes: metrics.compressedBytes)),
+                        .init(labelKey: .memorySnapshotSwapUsed, value: MemoryMetrics.format(bytes: metrics.swapUsedBytes))
+                    ]
+                ),
+                symbolName: "memorychip.fill"
+            )
+        }
+
         let lines = outputLines(from: output)
         let totalRAM = value(after: "Total RAM:", in: lines)
         let pageSize = pageSize(in: lines)

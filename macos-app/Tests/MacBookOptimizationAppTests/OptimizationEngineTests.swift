@@ -83,6 +83,44 @@ final class OptimizationEngineTests: XCTestCase {
         XCTAssertEqual(result.toast.summaryLines.first, "Apple M2 Pro")
     }
 
+    func testMemoryInspectionActionReturnsStructuredSummaryFromVmStatAndSwapUsage() async throws {
+        let executor = MockSystemCommandExecutor(
+            output: """
+            Total RAM Bytes: 34359738368
+            Swap Usage:
+            vm.swapusage: total = 1024.00M  used = 256.00M  free = 768.00M  (encrypted)
+
+            VM Stat:
+            Mach Virtual Memory Statistics: (page size of 16384 bytes)
+            Pages free: 16594.
+            Pages active: 741849.
+            Pages inactive: 708344.
+            Pages speculative: 858.
+            Pages throttled: 0.
+            Pages wired down: 155884.
+            Pages purgeable: 1236.
+            File-backed pages: 486967.
+            Anonymous pages: 964084.
+            Pages occupied by compressor: 431964.
+            """,
+            exitCode: 0
+        )
+        let engine = OptimizationEngine(
+            commandExecutor: executor,
+            stateStore: InMemoryStateStore(),
+            feedbackPresenter: ActionFeedbackPresenter(localizer: AppLocalizer(language: .english))
+        )
+
+        let action = OptimizationCatalog.actions().first(where: { $0.id == "system_check_memory" })!
+        let result = try await engine.execute(action)
+
+        XCTAssertTrue(result.summary?.primaryValue.contains("used") == true)
+        XCTAssertEqual(result.summary?.secondaryValues[0].labelKey, .memorySnapshotCachedFiles)
+        XCTAssertEqual(result.summary?.secondaryValues[1].labelKey, .memorySnapshotCompressed)
+        XCTAssertEqual(result.summary?.secondaryValues[2].labelKey, .memorySnapshotSwapUsed)
+        XCTAssertTrue(result.debugLog?.contains("vm.swapusage") == true)
+    }
+
     func testMDMInspectionUsesProfilesReadoutAsCurrentVerdictAndCalculatesResetRisk() async throws {
         let executor = MockSystemCommandExecutor(
             output: """
