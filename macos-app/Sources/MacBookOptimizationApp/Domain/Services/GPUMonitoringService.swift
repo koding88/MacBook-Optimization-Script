@@ -265,7 +265,7 @@ final class AdvancedGPUMonitoringService: GPUMonitoringServiceProtocol {
         let pid = shellQuoted(pidFilePath)
 
         return """
-        output_file=\(output); stop_file=\(stop); pid_file=\(pid); if [ -f "$pid_file" ]; then stale_pid="$(cat "$pid_file" 2>/dev/null)"; if [ -n "$stale_pid" ] && kill -0 "$stale_pid" 2>/dev/null; then kill -TERM "$stale_pid" 2>/dev/null || true; sleep 1; kill -KILL "$stale_pid" 2>/dev/null || true; fi; fi; rm -f "$stop_file" "$pid_file"; : > "$output_file"; interval_ms=\(sampleIntervalMilliseconds); /bin/sh -c 'printf "%s" "$$" > "$1"; exec /usr/bin/powermetrics --samplers gpu_power -i "$2" >> "$3" 2>&1 </dev/null' sh "$pid_file" "$interval_ms" "$output_file" >/dev/null 2>&1 & printf 'started\\n'
+        output_file=\(output); stop_file=\(stop); pid_file=\(pid); if [ -f "$pid_file" ]; then stale_pid="$(cat "$pid_file" 2>/dev/null)"; if [ -n "$stale_pid" ] && kill -0 "$stale_pid" 2>/dev/null; then kill -TERM "$stale_pid" 2>/dev/null || true; sleep 1; kill -KILL "$stale_pid" 2>/dev/null || true; fi; fi; rm -f "$stop_file" "$pid_file"; : > "$output_file"; interval_ms=\(sampleIntervalMilliseconds); /bin/sh -c 'printf "%s" "$$" > "$1"; status=0; while [ ! -f "$2" ]; do /usr/bin/powermetrics --samplers gpu_power -i "$3" -n 1 >> "$4" 2>&1 </dev/null; status=$?; [ "$status" -eq 0 ] || break; done; exit "$status"' sh "$pid_file" "$stop_file" "$interval_ms" "$output_file" >/dev/null 2>&1 & printf 'started\\n'
         """
     }
 
