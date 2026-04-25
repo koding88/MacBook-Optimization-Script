@@ -250,11 +250,33 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var quickPanelDetail: some View {
-        if let action = model.selectedQuickPanelAction {
-            QuickPanelDetailView(action: action, localizer: localizer)
-                .environmentObject(model)
-                .id("quick-panel-\(action.id)")
-        } else {
+        switch model.selectedDestination {
+        case .cpu:
+            if let cpuVM = model.cpuSnapshotViewModel {
+                CPUSnapshotView(viewModel: cpuVM)
+                    .navigationTitle(localizer.text(.panelCPU))
+            }
+        case .gpu:
+            if let gpuVM = model.gpuSnapshotViewModel {
+                GPUSnapshotView(viewModel: gpuVM)
+                    .navigationTitle(localizer.text(.panelGPU))
+            }
+        case .memory:
+            if let memoryVM = model.memorySnapshotViewModel {
+                MemorySnapshotView(viewModel: memoryVM)
+                    .navigationTitle(localizer.text(.panelMemory))
+            }
+        case .battery:
+            if let batteryVM = model.batterySnapshotViewModel {
+                BatterySnapshotView(viewModel: batteryVM)
+                    .navigationTitle(localizer.text(.panelBattery))
+            }
+        case .mdm:
+            if let mdmVM = model.mdmSnapshotViewModel {
+                MDMSnapshotView(viewModel: mdmVM)
+                    .navigationTitle(localizer.text(.panelMDM))
+            }
+        default:
             Text(localizer.text(.noOutputYet))
                 .foregroundStyle(.secondary)
         }
