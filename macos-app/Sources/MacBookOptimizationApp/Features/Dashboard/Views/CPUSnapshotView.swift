@@ -194,6 +194,7 @@ struct CPUSnapshotView: View {
                 .animation(.easeInOut(duration: 0.22), value: overallChartIdentity)
             }
         }
+        .id("cpu-overall-usage-section")
     }
 
     private var advancedDiagnosticsSection: some View {
@@ -303,6 +304,7 @@ struct CPUSnapshotView: View {
                 }
             }
         }
+        .id("cpu-advanced-summary-card")
     }
 
     private func clusterActivitySection(metrics: CPUMetrics) -> some View {
@@ -342,6 +344,7 @@ struct CPUSnapshotView: View {
                 }
             }
         }
+        .id("cpu-cluster-activity-card")
     }
 
     private func coreResidencyBars(metrics: CPUMetrics) -> some View {
@@ -383,6 +386,7 @@ struct CPUSnapshotView: View {
                 }
             }
         }
+        .id("cpu-core-residency-card")
     }
 
     private func coreFrequencyHeatmap(metrics: CPUMetrics) -> some View {
@@ -427,6 +431,7 @@ struct CPUSnapshotView: View {
                 frequencyLegend
             }
         }
+        .id("cpu-frequency-heatmap-card")
     }
 
     private var frequencyLegend: some View {
@@ -535,6 +540,7 @@ struct CPUSnapshotView: View {
                 }
             }
         }
+        .id("cpu-frequency-distribution-card")
     }
 
     private func powerConsumptionGauges(metrics: CPUMetrics) -> some View {
@@ -573,6 +579,7 @@ struct CPUSnapshotView: View {
                 }
             }
         }
+        .id("cpu-power-consumption-card")
     }
 
     private func powerRow(title: String, value: Int, max maxValue: Int, color: Color) -> some View {

@@ -105,49 +105,35 @@ struct DashboardView: View {
     }
 
     private var sidebar: some View {
-        List(selection: Binding(
-            get: { model.selectedDestination },
-            set: { if let value = $0 { model.showDestination(value) } }
-        )) {
-            Section(localizer.text(.summaryTitle)) {
-                sidebarItem(localizer.text(.panelDashboard), systemImage: "macwindow", destination: .dashboard)
-                sidebarItem(localizer.text(.panelAllStatuses), systemImage: "list.bullet.rectangle", destination: .statuses)
-                sidebarItem(localizer.text(.activityTitle), systemImage: "bell.badge", destination: .activity)
-                sidebarItem(localizer.text(.logsTitle), systemImage: "terminal", destination: .logs)
-            }
-
-            Section(localizer.text(.categories)) {
-                ForEach(ActionCategory.allCases) { category in
-                    sidebarItem(localizer.text(category.localizedKey), systemImage: category.symbolName, destination: .category(category))
-                }
-            }
-
-            Section(localizer.text(.quickPanels)) {
-                sidebarItem(localizer.text(.panelCPU), systemImage: "cpu", destination: .cpu)
-                sidebarItem(localizer.text(.panelGPU), systemImage: "display.2", destination: .gpu)
-                sidebarItem(localizer.text(.panelMemory), systemImage: "memorychip", destination: .memory)
-                sidebarItem(localizer.text(.panelBattery), systemImage: "battery.75percent", destination: .battery)
-                sidebarItem(localizer.text(.panelMDM), systemImage: "building.2.crop.circle", destination: .mdm)
-            }
-        }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        DashboardSidebarView(
+            title: localizer.text(.appTitle),
+            selectedDestination: model.selectedDestination,
+            onSelect: model.showDestination,
+            summaryTitle: localizer.text(.summaryTitle),
+            categoriesTitle: localizer.text(.categories),
+            quickPanelsTitle: localizer.text(.quickPanels),
+            summaryItems: [
+                .item(title: localizer.text(.panelDashboard), systemImage: "macwindow", destination: .dashboard),
+                .item(title: localizer.text(.panelAllStatuses), systemImage: "list.bullet.rectangle", destination: .statuses),
+                .item(title: localizer.text(.activityTitle), systemImage: "bell.badge", destination: .activity),
+                .item(title: localizer.text(.logsTitle), systemImage: "terminal", destination: .logs)
+            ],
+            categoryItems: ActionCategory.allCases.map {
+                .item(
+                    title: localizer.text($0.localizedKey),
+                    systemImage: $0.symbolName,
+                    destination: .category($0)
+                )
+            },
+            quickPanelItems: [
+                .item(title: localizer.text(.panelCPU), systemImage: "cpu", destination: .cpu),
+                .item(title: localizer.text(.panelGPU), systemImage: "display.2", destination: .gpu),
+                .item(title: localizer.text(.panelMemory), systemImage: "memorychip", destination: .memory),
+                .item(title: localizer.text(.panelBattery), systemImage: "battery.75percent", destination: .battery),
+                .item(title: localizer.text(.panelMDM), systemImage: "building.2.crop.circle", destination: .mdm)
+            ]
+        )
         .navigationTitle(localizer.text(.appTitle))
-    }
-
-    private func sidebarItem(_ title: String, systemImage: String, destination: SidebarDestination) -> some View {
-        Label {
-            Text(title)
-                .font(.body.weight(model.selectedDestination == destination ? .semibold : .regular))
-        } icon: {
-            Image(systemName: systemImage)
-                .symbolVariant(model.selectedDestination == destination ? .fill : .none)
-                .foregroundStyle(model.selectedDestination == destination ? Color.accentColor : .secondary)
-                .frame(width: 18)
-        }
-        .padding(.vertical, 4)
-        .tag(destination)
     }
 
     @ViewBuilder
@@ -287,5 +273,351 @@ struct DashboardView: View {
             Text(localizer.text(.noOutputYet))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct SidebarItemDefinition: Identifiable {
+    let title: String
+    let systemImage: String
+    let destination: SidebarDestination
+    let accentColor: Color
+
+    var id: SidebarDestination { destination }
+}
+
+private extension SidebarDestination {
+    var sidebarAccentColor: Color {
+        switch self {
+        case .dashboard:
+            return .blue
+        case .statuses:
+            return Color(nsColor: .systemBlue).opacity(0.8)
+        case .activity:
+            return Color(nsColor: .systemOrange)
+        case .logs:
+            return Color(nsColor: .systemGray)
+        case .category(let category):
+            switch category {
+            case .system:
+                return Color(nsColor: .systemIndigo).opacity(0.75)
+            case .network:
+                return .cyan
+            case .storage:
+                return .teal
+            case .performance:
+                return .purple
+            case .maintenance:
+                return .orange
+            case .monitoring:
+                return .green
+            }
+        case .cpu:
+            return .blue
+        case .gpu:
+            return Color(nsColor: .systemIndigo)
+        case .memory:
+            return .purple
+        case .battery:
+            return .green
+        case .mdm:
+            return Color(nsColor: .systemGray)
+        }
+    }
+}
+
+private extension SidebarItemDefinition {
+    static func item(title: String, systemImage: String, destination: SidebarDestination) -> SidebarItemDefinition {
+        SidebarItemDefinition(
+            title: title,
+            systemImage: systemImage,
+            destination: destination,
+            accentColor: destination.sidebarAccentColor
+        )
+    }
+}
+
+private extension Color {
+    static let sidebarSurface = Color(nsColor: NSColor.windowBackgroundColor).opacity(0.9)
+    static let sidebarHeaderSurface = Color.white.opacity(0.55)
+    static let sidebarHoverFill = Color.black.opacity(0.045)
+    static let sidebarTitleColor = Color(nsColor: .secondaryLabelColor)
+    static let sidebarTextColor = Color(nsColor: .secondaryLabelColor)
+    static let sidebarIconNeutral = Color(nsColor: .secondaryLabelColor).opacity(0.92)
+    static let sidebarSelectionBlue = Color(nsColor: NSColor(calibratedRed: 0.44, green: 0.66, blue: 0.96, alpha: 1))
+}
+
+private extension ShapeStyle where Self == AnyShapeStyle {
+    static func sidebarSelectionFill(accentColor: Color) -> AnyShapeStyle {
+        AnyShapeStyle(
+            LinearGradient(
+                colors: [
+                    accentColor.opacity(0.18),
+                    Color.sidebarSelectionBlue.opacity(0.11)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+    }
+}
+
+private extension SidebarItemDefinition {
+    var selectedIconColor: Color {
+        accentColor
+    }
+}
+
+private extension SidebarDestination {
+    var selectedPillColor: AnyShapeStyle {
+        .sidebarSelectionFill(accentColor: sidebarAccentColor)
+    }
+}
+
+private extension SidebarItemDefinition {
+    var selectedPillColor: AnyShapeStyle {
+        destination.selectedPillColor
+    }
+}
+
+private extension SidebarItemDefinition {
+    var selectedTextColor: Color {
+        Color(nsColor: .labelColor)
+    }
+}
+
+private extension SidebarItemDefinition {
+    var inactiveTextColor: Color {
+        .sidebarTextColor
+    }
+}
+
+private extension SidebarItemDefinition {
+    var inactiveIconColor: Color {
+        .sidebarIconNeutral
+    }
+}
+
+private extension SidebarItemDefinition {
+    var hoverFillColor: Color {
+        accentColor.opacity(0.08)
+    }
+}
+
+private extension SidebarItemDefinition {
+    var selectionBorderColor: Color {
+        Color.white.opacity(0.32)
+    }
+}
+
+private extension SidebarItemDefinition {
+    var selectionShadowColor: Color {
+        accentColor.opacity(0.10)
+    }
+}
+
+private extension SidebarItemDefinition {
+    var hoverScale: CGFloat { 1.008 }
+}
+
+private extension SidebarItemDefinition {
+    var rowCornerRadius: CGFloat { 13 }
+}
+
+private extension SidebarItemDefinition {
+    var titleTracking: CGFloat { 0.2 }
+}
+
+private extension SidebarItemDefinition {
+    var groupLabelColor: Color { .sidebarTitleColor }
+}
+
+private extension SidebarItemDefinition {
+    var selectedPillInsetShadow: Color { Color.white.opacity(0.18) }
+}
+
+private extension SidebarItemDefinition {
+    var headerDividerColor: Color { Color.black.opacity(0.06) }
+}
+
+private extension SidebarItemDefinition {
+    var headerMaterialOverlay: Color { Color.white.opacity(0.42) }
+}
+
+private extension SidebarItemDefinition {
+    var surfaceStrokeColor: Color { Color.white.opacity(0.30) }
+}
+
+private extension SidebarItemDefinition {
+    var surfaceShadowColor: Color { Color.black.opacity(0.04) }
+}
+
+private extension SidebarItemDefinition {
+    var titleFontSize: CGFloat { 18 }
+}
+
+private extension SidebarItemDefinition {
+    var sectionLabelFontSize: CGFloat { 10.5 }
+}
+
+private extension SidebarItemDefinition {
+    var rowFontSize: CGFloat { 13 }
+}
+
+private extension SidebarItemDefinition {
+    var iconFontSize: CGFloat { 14 }
+}
+
+private extension SidebarItemDefinition {
+    var iconFrameWidth: CGFloat { 18 }
+}
+
+private extension SidebarItemDefinition {
+    var rowHorizontalPadding: CGFloat { 10 }
+}
+
+private extension SidebarItemDefinition {
+    var rowVerticalPadding: CGFloat { 8 }
+}
+
+private extension SidebarItemDefinition {
+    var rowSpacing: CGFloat { 10 }
+}
+
+private extension SidebarItemDefinition {
+    var sectionItemSpacing: CGFloat { 3 }
+}
+
+private extension SidebarItemDefinition {
+    var sectionSpacing: CGFloat { 18 }
+}
+
+private extension SidebarItemDefinition {
+    var containerHorizontalPadding: CGFloat { 10 }
+}
+
+private extension SidebarItemDefinition {
+    var titleHorizontalPadding: CGFloat { 14 }
+}
+
+private struct DashboardSidebarView: View {
+    let title: String
+    let selectedDestination: SidebarDestination
+    let onSelect: (SidebarDestination) -> Void
+    let summaryTitle: String
+    let categoriesTitle: String
+    let quickPanelsTitle: String
+    let summaryItems: [SidebarItemDefinition]
+    let categoryItems: [SidebarItemDefinition]
+    let quickPanelItems: [SidebarItemDefinition]
+
+    @Namespace private var selectionNamespace
+
+    private let selectionAnimation = Animation.easeOut(duration: 0.18)
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                sidebarGroup(title: summaryTitle, items: summaryItems)
+                sidebarGroup(title: categoriesTitle, items: categoryItems)
+                sidebarGroup(title: quickPanelsTitle, items: quickPanelItems)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
+        }
+        .scrollIndicators(.hidden)
+        .background(Color.sidebarSurface)
+    }
+
+    private func sidebarGroup(title: String, items: [SidebarItemDefinition]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(Color.sidebarTitleColor)
+                .padding(.horizontal, 8)
+
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(items) { item in
+                    DashboardSidebarRow(
+                        item: item,
+                        isSelected: selectedDestination == item.destination,
+                        namespace: selectionNamespace,
+                        selectionAnimation: selectionAnimation
+                    ) {
+                        withAnimation(selectionAnimation) {
+                            onSelect(item.destination)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct DashboardSidebarRow: View {
+    let item: SidebarItemDefinition
+    let isSelected: Bool
+    let namespace: Namespace.ID
+    let selectionAnimation: Animation
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: item.systemImage)
+                    .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
+                    .symbolVariant(isSelected ? .fill : .none)
+                    .foregroundStyle(iconColor)
+                    .frame(width: 18)
+
+                Text(item.title)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(textColor)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .background(alignment: .leading) {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(selectionFill)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .strokeBorder(item.selectionBorderColor, lineWidth: 0.6)
+                        }
+                        .shadow(color: item.selectionShadowColor, radius: 10, y: 3)
+                        .matchedGeometryEffect(id: "sidebar-selection-pill", in: namespace)
+                } else if isHovered {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(item.hoverFillColor)
+                }
+            }
+            .scaleEffect(1)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private var textColor: Color {
+        isSelected ? item.selectedTextColor : item.inactiveTextColor
+    }
+
+    private var iconColor: Color {
+        isSelected ? item.selectedIconColor : item.inactiveIconColor
+    }
+
+    private var selectionFill: some ShapeStyle {
+        item.selectedPillColor
     }
 }

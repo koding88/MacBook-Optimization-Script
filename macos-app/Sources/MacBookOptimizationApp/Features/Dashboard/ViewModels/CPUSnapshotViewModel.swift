@@ -26,8 +26,8 @@ final class CPUSnapshotViewModel: ObservableObject {
     @Published var basicMetricsHistory: [BasicCPUMetrics] = []
     @Published var advancedMetrics: CPUMetrics?
     @Published var advancedMetricsHistory: [CPUMetrics] = []
-    @Published var currentMetrics: CPUMetrics?
-    @Published var metricsHistory: [CPUMetrics] = []
+    var currentMetrics: CPUMetrics?
+    var metricsHistory: [CPUMetrics] = []
     @Published var refreshInterval: RefreshInterval {
         didSet {
             UserDefaults.standard.set(refreshInterval.rawValue, forKey: "cpuSnapshotRefreshInterval")
@@ -107,11 +107,7 @@ final class CPUSnapshotViewModel: ObservableObject {
 
                     if !self.isPaused {
                         basicMetrics = metrics
-                        basicMetricsHistory.append(metrics)
-
-                        if basicMetricsHistory.count > maxHistoryCount {
-                            basicMetricsHistory.removeFirst()
-                        }
+                        basicMetricsHistory = trimmedBasicHistory(appending: metrics)
                     }
 
                     try await Task.sleep(nanoseconds: UInt64(refreshInterval.timeInterval * 1_000_000_000))
@@ -322,8 +318,8 @@ final class CPUSnapshotViewModel: ObservableObject {
     private func appendAdvancedMetrics(_ metrics: CPUMetrics) {
         advancedMetrics = metrics
         currentMetrics = metrics
-        advancedMetricsHistory.append(metrics)
-        metricsHistory.append(metrics)
+        advancedMetricsHistory = trimmedAdvancedHistory(appending: metrics)
+        metricsHistory = trimmedMetricsHistory(appending: metrics)
 
         if selectedFrequencyClusterID == nil
             || !metrics.clusters.contains(where: {
@@ -331,14 +327,33 @@ final class CPUSnapshotViewModel: ObservableObject {
             }) {
             selectedFrequencyClusterID = metrics.clusters.first(where: { !$0.frequencyDistribution.isEmpty })?.id
         }
+    }
 
-        if advancedMetricsHistory.count > maxHistoryCount {
-            advancedMetricsHistory.removeFirst()
+    private func trimmedBasicHistory(appending metrics: BasicCPUMetrics) -> [BasicCPUMetrics] {
+        var history = basicMetricsHistory
+        history.append(metrics)
+        if history.count > maxHistoryCount {
+            history.removeFirst(history.count - maxHistoryCount)
         }
+        return history
+    }
 
-        if metricsHistory.count > maxHistoryCount {
-            metricsHistory.removeFirst()
+    private func trimmedAdvancedHistory(appending metrics: CPUMetrics) -> [CPUMetrics] {
+        var history = advancedMetricsHistory
+        history.append(metrics)
+        if history.count > maxHistoryCount {
+            history.removeFirst(history.count - maxHistoryCount)
         }
+        return history
+    }
+
+    private func trimmedMetricsHistory(appending metrics: CPUMetrics) -> [CPUMetrics] {
+        var history = metricsHistory
+        history.append(metrics)
+        if history.count > maxHistoryCount {
+            history.removeFirst(history.count - maxHistoryCount)
+        }
+        return history
     }
 
     private func dominantPowerDetail(for power: CPUMetrics.PowerMetrics) -> String {
