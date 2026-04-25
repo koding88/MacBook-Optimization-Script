@@ -202,6 +202,9 @@ struct DashboardView: View {
             }
         }
         .listStyle(.inset)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
     }
 
     private func categoryDetail(_ category: ActionCategory) -> some View {

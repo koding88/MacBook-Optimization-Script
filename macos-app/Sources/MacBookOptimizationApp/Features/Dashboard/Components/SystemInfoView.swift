@@ -4,6 +4,8 @@ struct SystemInfoView: View {
     let summary: MachineSummary?
     let localizer: AppLocalizer
 
+    private let placeholderCardCount = 6
+
     private var formatter: SystemInfoFormatter {
         SystemInfoFormatter(localizer: localizer)
     }
@@ -68,11 +70,11 @@ struct SystemInfoView: View {
     }
 
     var body: some View {
-        if let summary {
-            VStack(alignment: .leading, spacing: 18) {
-                header(summary: summary)
+        VStack(alignment: .leading, spacing: 18) {
+            header(summary: summary)
 
-                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 16) {
+            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 16) {
+                if let summary {
                     specCard(
                         title: localizer.text(.systemLabelChip),
                         symbolName: "cpu.fill",
@@ -113,16 +115,20 @@ struct SystemInfoView: View {
                         primaryValue: summary.systemVersion,
                         secondaryValue: nil
                     )
+                } else {
+                    ForEach(0..<placeholderCardCount, id: \.self) { _ in
+                        placeholderCard
+                    }
                 }
             }
-            .padding(.vertical, 6)
-        } else {
-            ProgressView()
-                .controlSize(.small)
         }
+        .padding(.vertical, 6)
+        .redacted(reason: summary == nil ? .placeholder : [])
+        .allowsHitTesting(summary != nil)
     }
 
-    private func header(summary: MachineSummary) -> some View {
+    @ViewBuilder
+    private func header(summary: MachineSummary?) -> some View {
         HStack(alignment: .top, spacing: 16) {
             Image(systemName: "laptopcomputer")
                 .font(.system(size: 34, weight: .medium))
@@ -131,18 +137,38 @@ struct SystemInfoView: View {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(summary.marketingModel)
+                Text(summary?.marketingModel ?? "MacBook Pro")
                     .font(.title2.weight(.semibold))
 
-                if summary.marketingModel != summary.modelName {
+                if let summary, summary.marketingModel != summary.modelName {
                     Text(summary.modelName)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
-                Text(summary.systemVersion)
+                Text(summary?.systemVersion ?? "macOS")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var placeholderCard: some View {
+        SystemSpecCard(
+            symbolName: "circle.fill",
+            title: "Loading",
+            symbolPrimaryColor: .secondary,
+            symbolSecondaryColor: .secondary
+        ) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Placeholder")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                Text("Placeholder detail")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

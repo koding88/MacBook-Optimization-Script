@@ -608,6 +608,23 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
         model.clearAllActivity()
         XCTAssertTrue(model.activityFeed.isEmpty)
     }
+
+    @MainActor
+    func testMachineSummaryLoadsAsynchronouslyFromNilInitialState() async {
+        let provider = DelayedMockSystemInfoProvider()
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: UserDefaults(suiteName: #function)!),
+            systemInfoProvider: provider
+        )
+
+        XCTAssertNil(model.machineSummary)
+
+        try? await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(model.machineSummary?.chipName, "Apple M3")
+    }
 }
 
 @MainActor
@@ -677,6 +694,13 @@ private struct MockSystemInfoProvider: SystemInfoProviding {
             battery: nil,
             serialNumber: nil
         )
+    }
+}
+
+private struct DelayedMockSystemInfoProvider: SystemInfoProviding {
+    func machineSummary() async -> MachineSummary {
+        try? await Task.sleep(nanoseconds: 40_000_000)
+        return await MockSystemInfoProvider().machineSummary()
     }
 }
 
