@@ -451,6 +451,8 @@ enum LocalizedKey: String {
     case mdmSnapshotTitle = "mdm.snapshot.title"
     case mdmSnapshotRefresh = "mdm.snapshot.refresh"
     case mdmSnapshotChecking = "mdm.snapshot.checking"
+    case mdmSnapshotAuthorizationTitle = "mdm.snapshot.authorization.title"
+    case mdmSnapshotAuthorizationMessage = "mdm.snapshot.authorization.message"
     case mdmSnapshotNotChecked = "mdm.snapshot.notChecked"
     case mdmSnapshotClickToCheck = "mdm.snapshot.clickToCheck"
     case mdmSnapshotCheckNow = "mdm.snapshot.checkNow"

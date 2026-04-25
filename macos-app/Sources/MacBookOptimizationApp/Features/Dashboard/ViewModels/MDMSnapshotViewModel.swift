@@ -2,10 +2,18 @@ import Foundation
 
 @MainActor
 final class MDMSnapshotViewModel: ObservableObject {
+    enum LoadingState: Equatable {
+        case idle
+        case requestingAuthorization
+        case collecting
+        case failed(String)
+    }
+
     @Published var currentMetrics: MDMMetrics?
     @Published var isLoading = false
     @Published var error: String?
     @Published var rawOutput: String = ""
+    @Published var loadingState: LoadingState = .idle
     
     private let commandExecutor: SystemCommandExecuting
     
@@ -13,11 +21,16 @@ final class MDMSnapshotViewModel: ObservableObject {
         self.commandExecutor = commandExecutor
     }
     
+    var isPromptingForOSA: Bool {
+        loadingState == .requestingAuthorization
+    }
+
     func refresh() {
         guard !isLoading else { return }
         
         isLoading = true
         error = nil
+        loadingState = .collecting
         
         Task {
             do {
@@ -32,6 +45,12 @@ final class MDMSnapshotViewModel: ObservableObject {
                 var combinedOutput: [String] = []
                 
                 for request in requests {
+                    if request.requiresAdministrator {
+                        self.loadingState = .requestingAuthorization
+                    } else {
+                        self.loadingState = .collecting
+                    }
+
                     let result = try await commandExecutor.execute(request)
                     if !result.output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         combinedOutput.append("$ \(request.command)\n\(result.output.trimmingCharacters(in: .whitespacesAndNewlines))")
@@ -48,6 +67,7 @@ final class MDMSnapshotViewModel: ObservableObject {
                 // Parse metrics
                 if let metrics = MDMMetricsParser.parse(output) {
                     self.currentMetrics = metrics
+                    self.loadingState = .idle
                 } else {
                     throw MDMSnapshotError.parsingFailed
                 }
@@ -55,6 +75,7 @@ final class MDMSnapshotViewModel: ObservableObject {
                 self.isLoading = false
             } catch {
                 self.error = error.localizedDescription
+                self.loadingState = .failed(error.localizedDescription)
                 self.isLoading = false
             }
         }

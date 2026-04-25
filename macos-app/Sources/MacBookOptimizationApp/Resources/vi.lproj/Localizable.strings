@@ -706,6 +706,8 @@
 "mdm.snapshot.title" = "Trạng thái MDM";
 "mdm.snapshot.refresh" = "Làm mới";
 "mdm.snapshot.checking" = "Đang kiểm tra trạng thái MDM...";
+"mdm.snapshot.authorization.title" = "Cần quyền quản trị";
+"mdm.snapshot.authorization.message" = "Vui lòng nhập mật khẩu để kiểm tra MDM.";
 "mdm.snapshot.notChecked" = "Chưa kiểm tra trạng thái MDM";
 "mdm.snapshot.clickToCheck" = "Nhấn nút bên dưới để kiểm tra trạng thái enrollment MDM";
 "mdm.snapshot.checkNow" = "Kiểm tra ngay";

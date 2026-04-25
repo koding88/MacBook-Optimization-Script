@@ -706,6 +706,8 @@
 "mdm.snapshot.title" = "MDM Status";
 "mdm.snapshot.refresh" = "Refresh";
 "mdm.snapshot.checking" = "Checking MDM status...";
+"mdm.snapshot.authorization.title" = "Administrator access required";
+"mdm.snapshot.authorization.message" = "Enter your password to check MDM status.";
 "mdm.snapshot.notChecked" = "MDM status not checked yet";
 "mdm.snapshot.clickToCheck" = "Click the button below to check MDM enrollment status";
 "mdm.snapshot.checkNow" = "Check Now";

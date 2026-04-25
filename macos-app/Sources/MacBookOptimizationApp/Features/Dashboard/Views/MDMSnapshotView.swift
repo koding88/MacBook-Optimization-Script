@@ -16,6 +16,10 @@ struct MDMSnapshotView: View {
     }
 
     private var shouldBlurStatusContent: Bool {
+        viewModel.isLoading
+    }
+
+    private var shouldBlurDetailContent: Bool {
         viewModel.currentMetrics == nil && viewModel.isLoading
     }
 
@@ -37,36 +41,33 @@ struct MDMSnapshotView: View {
             VStack(spacing: 16) {
                 headerSection
 
-                if let metrics = viewModel.currentMetrics {
-                    statusOverview(metrics: metrics)
-
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 16) {
-                            enrollmentCard(metrics: metrics)
-                            depAssignmentCard(metrics: metrics)
-                        }
-
-                        VStack(spacing: 16) {
-                            enrollmentCard(metrics: metrics)
-                            depAssignmentCard(metrics: metrics)
-                        }
+                ZStack {
+                    // Always show content
+                    if let error = viewModel.error, viewModel.currentMetrics == nil && !viewModel.isLoading {
+                        errorState(error: error)
+                    } else if viewModel.currentMetrics == nil && !viewModel.isLoading {
+                        emptyStateView
+                    } else {
+                        contentSection(metrics: statusDisplayMetrics)
                     }
                     
-                    historicalTracesCard(metrics: metrics)
-                    
-                    if let config = metrics.depConfig {
-                        depConfigurationCard(config: config)
+                    // Blur overlay when prompting OSA
+                    if viewModel.isPromptingForOSA {
+                        Color.black.opacity(0.3)
+                            .blur(radius: 2)
+                        
+                        VStack(spacing: 12) {
+                            Image(systemName: "lock.shield")
+                                .font(.system(size: 48))
+                                .foregroundColor(.white.opacity(0.9))
+                            Text(localizer.text(.mdmSnapshotAuthorizationTitle))
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Text(localizer.text(.mdmSnapshotAuthorizationMessage))
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
                     }
-                    
-                    resetRiskCard(metrics: metrics)
-                } else if viewModel.isLoading {
-                    statusOverview(metrics: statusDisplayMetrics)
-                    ProgressView(localizer.text(.mdmSnapshotChecking))
-                        .frame(maxWidth: .infinity, minHeight: 240)
-                } else if let error = viewModel.error {
-                    errorState(error: error)
-                } else {
-                    emptyStateView
                 }
             }
             .padding()
@@ -76,6 +77,41 @@ struct MDMSnapshotView: View {
                 viewModel.refresh()
             }
         }
+    }
+
+    private func contentSection(metrics: MDMMetrics) -> some View {
+        VStack(spacing: 16) {
+            statusOverview(metrics: metrics)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 16) {
+                    enrollmentCard(metrics: metrics)
+                    depAssignmentCard(metrics: metrics)
+                }
+
+                VStack(spacing: 16) {
+                    enrollmentCard(metrics: metrics)
+                    depAssignmentCard(metrics: metrics)
+                }
+            }
+            .blur(radius: shouldBlurDetailContent ? statusLoadingBlur : 0)
+            .allowsHitTesting(!shouldBlurDetailContent)
+
+            historicalTracesCard(metrics: metrics)
+                .blur(radius: shouldBlurDetailContent ? statusLoadingBlur : 0)
+                .allowsHitTesting(!shouldBlurDetailContent)
+
+            if let config = metrics.depConfig {
+                depConfigurationCard(config: config)
+                    .blur(radius: shouldBlurDetailContent ? statusLoadingBlur : 0)
+                    .allowsHitTesting(!shouldBlurDetailContent)
+            }
+
+            resetRiskCard(metrics: metrics)
+                .blur(radius: shouldBlurDetailContent ? statusLoadingBlur : 0)
+                .allowsHitTesting(!shouldBlurDetailContent)
+        }
+        .animation(.easeInOut(duration: 0.24), value: shouldBlurDetailContent)
     }
 
     private var headerSection: some View {
