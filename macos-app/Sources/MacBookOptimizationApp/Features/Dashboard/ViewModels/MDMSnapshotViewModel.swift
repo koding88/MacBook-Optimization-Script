@@ -21,11 +21,12 @@ final class MDMSnapshotViewModel: ObservableObject {
         
         Task {
             do {
-                // Get the MDM check action from catalog
-                guard let mdmAction = OptimizationCatalog.actions().first(where: { $0.id == "mdm_status" }),
-                      case .command(let requests) = mdmAction.kind else {
-                    throw MDMSnapshotError.actionNotFound
-                }
+                // Hardcoded MDM check commands (no longer in catalog)
+                let requests = [
+                    CommandRequest(command: "printf 'Historical local traces:\\n'; if [ -f /var/db/ConfigurationProfiles/Settings/.cloudConfigProfileInstalled ]; then printf 'DEP trace files: Present\\n'; else printf 'DEP trace files: Absent\\n'; fi; if [ -f /var/db/ConfigurationProfiles/Settings/.cloudConfigRecordFound ] || [ -f /var/db/ConfigurationProfiles/Settings/.cloudConfigHasActivationRecord ] || [ -f /var/db/ConfigurationProfiles/Settings/com.apple.mdm.depnag.plist ]; then printf 'Historical MDM traces: Present\\n'; else printf 'Historical MDM traces: Absent\\n'; fi", requiresAdministrator: false),
+                    CommandRequest(command: "printf '\\nHosts advisory entries:\\n' && (grep -E '^0\\.0\\.0\\.0[[:space:]]+(deviceenrollment\\.apple\\.com|mdmenrollment\\.apple\\.com|iprofiles\\.apple\\.com)([[:space:]]|$)' /etc/hosts || printf 'No MDM-related host overrides found.\\n')", requiresAdministrator: false),
+                    CommandRequest(command: "tmp_backup=$(mktemp /tmp/mbo-hosts-backup.XXXXXX); tmp_filtered=$(mktemp /tmp/mbo-hosts-filtered.XXXXXX); cp /etc/hosts \"$tmp_backup\"; awk '!($1==\"0.0.0.0\" && ($2==\"deviceenrollment.apple.com\" || $2==\"mdmenrollment.apple.com\" || $2==\"iprofiles.apple.com\"))' /etc/hosts > \"$tmp_filtered\"; restore_hosts() { cat \"$tmp_backup\" > /etc/hosts; dscacheutil -flushcache; killall -HUP mDNSResponder >/dev/null 2>&1 || true; rm -f \"$tmp_backup\" \"$tmp_filtered\"; }; trap restore_hosts EXIT INT TERM HUP; cat \"$tmp_filtered\" > /etc/hosts; dscacheutil -flushcache; killall -HUP mDNSResponder >/dev/null 2>&1 || true; printf '\\nProfiles enrollment readout (temporary hosts bypass disabled):\\n'; printf '\\nprofiles status -type enrollment:\\n'; profiles status -type enrollment 2>/dev/null || printf 'Unavailable.\\n'; printf '\\nprofiles show -type enrollment:\\n'; profiles show -type enrollment 2>/dev/null || printf 'Unavailable.\\n'; printf '\\nprofiles list:\\n'; profiles list 2>/dev/null || printf 'Unavailable.\\n'; printf '\\nprofiles show -type configuration:\\n'; profiles show -type configuration 2>/dev/null || printf 'Unavailable.\\n'", requiresAdministrator: true)
+                ]
                 
                 // Execute commands
                 var combinedOutput: [String] = []
@@ -61,13 +62,10 @@ final class MDMSnapshotViewModel: ObservableObject {
 }
 
 enum MDMSnapshotError: LocalizedError {
-    case actionNotFound
     case parsingFailed
     
     var errorDescription: String? {
         switch self {
-        case .actionNotFound:
-            return "MDM status action not found in catalog."
         case .parsingFailed:
             return "Unable to parse MDM status output."
         }
