@@ -14,6 +14,10 @@ final class MDMSnapshotViewModel: ObservableObject {
     @Published var error: String?
     @Published var rawOutput: String = ""
     @Published var loadingState: LoadingState = .idle
+
+    var shouldShowInitialBlur: Bool {
+        currentMetrics == nil && !isLoading && error == nil
+    }
     
     private let commandExecutor: SystemCommandExecuting
     
@@ -74,11 +78,27 @@ final class MDMSnapshotViewModel: ObservableObject {
                 
                 self.isLoading = false
             } catch {
-                self.error = error.localizedDescription
-                self.loadingState = .failed(error.localizedDescription)
-                self.isLoading = false
+                if Self.isUserCancellation(error) {
+                    self.error = nil
+                    self.loadingState = .idle
+                    self.isLoading = false
+                } else {
+                    self.error = error.localizedDescription
+                    self.loadingState = .failed(error.localizedDescription)
+                    self.isLoading = false
+                }
             }
         }
+    }
+
+    private static func isUserCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+
+        let nsError = error as NSError
+        let message = nsError.localizedDescription.lowercased()
+        return nsError.code == -128 || message.contains("user canceled") || message.contains("user cancelled")
     }
 }
 

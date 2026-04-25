@@ -20,7 +20,7 @@ struct MDMSnapshotView: View {
     }
 
     private var shouldBlurDetailContent: Bool {
-        viewModel.currentMetrics == nil && viewModel.isLoading
+        (viewModel.currentMetrics == nil && viewModel.isLoading) || viewModel.shouldShowInitialBlur
     }
 
     private var placeholderMetrics: MDMMetrics {
@@ -31,52 +31,94 @@ struct MDMSnapshotView: View {
             enrolledViaDEP: false,
             mdmEnrolled: false,
             bypassHostsDetected: false,
-            depConfig: nil,
+            depConfig: .init(
+                organizationName: "Org",
+                configurationURL: "https://mdm.local",
+                isSupervised: false,
+                isMDMUnremovable: false,
+                isMandatory: false,
+                skipSetupItems: [],
+                organizationEmail: nil,
+                organizationPhone: nil,
+                organizationAddress: nil
+            ),
             installedProfiles: []
         )
     }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 8) {
                 headerSection
 
                 ZStack {
-                    // Always show content
                     if let error = viewModel.error, viewModel.currentMetrics == nil && !viewModel.isLoading {
                         errorState(error: error)
-                    } else if viewModel.currentMetrics == nil && !viewModel.isLoading {
-                        emptyStateView
+                    } else if let metrics = viewModel.currentMetrics {
+                        contentSection(metrics: metrics)
                     } else {
-                        contentSection(metrics: statusDisplayMetrics)
+                        initialPlaceholderContent
                     }
-                    
-                    // Blur overlay when prompting OSA
+
+                    if viewModel.shouldShowInitialBlur {
+                        idleBlurOverlay
+                    }
+
                     if viewModel.isPromptingForOSA {
-                        Color.black.opacity(0.3)
-                            .blur(radius: 2)
-                        
-                        VStack(spacing: 12) {
-                            Image(systemName: "lock.shield")
-                                .font(.system(size: 48))
-                                .foregroundColor(.white.opacity(0.9))
-                            Text(localizer.text(.mdmSnapshotAuthorizationTitle))
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Text(localizer.text(.mdmSnapshotAuthorizationMessage))
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.8))
-                        }
+                        osaOverlay
                     }
                 }
             }
             .padding()
         }
-        .onAppear {
-            if viewModel.currentMetrics == nil && !viewModel.isLoading {
-                viewModel.refresh()
+    }
+
+    private var idleBlurOverlay: some View {
+        Color.black.opacity(0.22)
+            .blur(radius: 2)
+            .overlay {
+                VStack(spacing: 12) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 44))
+                        .foregroundColor(.white.opacity(0.9))
+                    Text(localizer.text(.mdmSnapshotIdleTitle))
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text(localizer.text(.mdmSnapshotIdleMessage))
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.82))
+                    Button(localizer.text(.mdmSnapshotCheckNow)) {
+                        viewModel.refresh()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.white)
+                    .foregroundStyle(.black)
+                }
             }
-        }
+    }
+
+    private var osaOverlay: some View {
+        Color.black.opacity(0.3)
+            .blur(radius: 2)
+            .overlay {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(.white)
+                    Text(localizer.text(.mdmSnapshotChecking))
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text(localizer.text(.mdmSnapshotAuthorizationMessage))
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.82))
+                }
+            }
+    }
+
+    private var initialPlaceholderContent: some View {
+        contentSection(metrics: placeholderMetrics)
+            .redacted(reason: .placeholder)
+            .allowsHitTesting(false)
     }
 
     private func contentSection(metrics: MDMMetrics) -> some View {
@@ -84,12 +126,12 @@ struct MDMSnapshotView: View {
             statusOverview(metrics: metrics)
 
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .top, spacing: 8) {
                     enrollmentCard(metrics: metrics)
                     depAssignmentCard(metrics: metrics)
                 }
 
-                VStack(spacing: 16) {
+                VStack(spacing: 8) {
                     enrollmentCard(metrics: metrics)
                     depAssignmentCard(metrics: metrics)
                 }
@@ -132,7 +174,7 @@ struct MDMSnapshotView: View {
             Button(action: { viewModel.refresh() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise")
-                    Text(localizer.text(.mdmSnapshotRefresh))
+                    Text(viewModel.currentMetrics == nil ? localizer.text(.mdmSnapshotCheckNow) : localizer.text(.mdmSnapshotRefresh))
                 }
             }
             .buttonStyle(.bordered)
@@ -147,7 +189,7 @@ struct MDMSnapshotView: View {
 
     private func statusOverview(metrics: MDMMetrics) -> some View {
         snapshotCard {
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .top, spacing: 8) {
                 statusIconTile(for: metrics.enrollmentStatus)
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -171,7 +213,7 @@ struct MDMSnapshotView: View {
         }
         .blur(radius: shouldBlurStatusContent ? statusLoadingBlur : 0)
         .overlay {
-            if shouldBlurStatusContent {
+            if shouldBlurStatusContent && !viewModel.isPromptingForOSA {
                 loadingOverlay(text: localizer.text(.mdmSnapshotChecking))
             }
         }
@@ -358,8 +400,8 @@ struct MDMSnapshotView: View {
 
     private func snapshotCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12, content: content)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(cardBackground)
             .overlay(cardBorder)
             .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
