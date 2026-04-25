@@ -6,7 +6,13 @@ struct BatteryMetrics: Equatable {
         case battery = "Battery Power"
         case unknown = "Unknown"
 
-        var displayName: String { rawValue }
+        var localizedKey: LocalizedKey {
+            switch self {
+            case .ac: .batteryPowerSourceAC
+            case .battery: .batteryPowerSourceBattery
+            case .unknown: .unavailable
+            }
+        }
     }
 
     enum ChargingState: String, Equatable {
@@ -16,7 +22,15 @@ struct BatteryMetrics: Equatable {
         case acAttached = "AC Attached; Not Charging"
         case unknown = "Unknown"
 
-        var displayName: String { rawValue }
+        var localizedKey: LocalizedKey {
+            switch self {
+            case .charging: .batteryStateCharging
+            case .discharging: .batteryStateDischarging
+            case .charged: .batteryStateCharged
+            case .acAttached: .batteryStateACAttached
+            case .unknown: .batteryStateNotCharging
+            }
+        }
     }
 
     enum BatteryCondition: String, Equatable {
@@ -26,7 +40,15 @@ struct BatteryMetrics: Equatable {
         case serviceBattery = "Service Battery"
         case unknown = "Unknown"
 
-        var displayName: String { rawValue }
+        var localizedKey: LocalizedKey {
+            switch self {
+            case .normal: .batteryConditionNormal
+            case .replaceSoon: .batteryConditionReplaceSoon
+            case .replaceNow: .batteryConditionReplaceNow
+            case .serviceBattery: .batteryConditionServiceBattery
+            case .unknown: .unavailable
+            }
+        }
 
         var isHealthy: Bool {
             self == .normal

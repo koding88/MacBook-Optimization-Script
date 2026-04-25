@@ -80,6 +80,7 @@
 "system.label.display" = "Display";
 "system.label.battery" = "Battery";
 "system.label.macos" = "macOS";
+"system.unknown.mac" = "Mac";
 "panel.dashboard" = "Dashboard";
 "panel.statuses" = "All Statuses";
 "panel.cpu" = "CPU Snapshot";
@@ -708,6 +709,8 @@
 "mdm.snapshot.checking" = "Checking MDM status...";
 "mdm.snapshot.authorization.title" = "Administrator access required";
 "mdm.snapshot.authorization.message" = "Enter your password to check MDM status.";
+"mdm.snapshot.idle.title" = "Check MDM status";
+"mdm.snapshot.idle.message" = "Click the button below to request administrator access and run the check.";
 "mdm.snapshot.notChecked" = "MDM status not checked yet";
 "mdm.snapshot.clickToCheck" = "Click the button below to check MDM enrollment status";
 "mdm.snapshot.checkNow" = "Check Now";

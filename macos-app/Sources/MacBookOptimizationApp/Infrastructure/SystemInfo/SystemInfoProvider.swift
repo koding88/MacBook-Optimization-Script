@@ -35,7 +35,7 @@ final class SystemInfoProvider: SystemInfoProviding {
         let hardwareSnapshot = primaryHardwareSnapshot()
         let displaySnapshot = primaryDisplaySnapshot()
         let cpuCount = ProcessInfo.processInfo.processorCount
-        let modelIdentifier = hardwareSnapshot?.modelIdentifier ?? sysctlString("hw.model") ?? "Mac"
+        let modelIdentifier = hardwareSnapshot?.modelIdentifier ?? sysctlString("hw.model") ?? localizer.text(.systemUnknownMac)
         let marketingModel = hardwareSnapshot?.marketingModel ?? modelIdentifier
         let chipName = hardwareSnapshot?.chipName ?? sysctlString("machdep.cpu.brand_string") ?? appleSiliconChipName()
 
@@ -70,9 +70,9 @@ final class SystemInfoProvider: SystemInfoProviding {
 
     private func appleSiliconChipName() -> String {
         if let machine = sysctlString("hw.optional.arm64"), machine == "1" {
-            return "Apple Silicon"
+            return localizer.text(.dashboardAppleSilicon)
         }
-        return "Unknown"
+        return localizer.text(.unavailable)
     }
 
     private func primaryDisplaySnapshot() -> DisplaySnapshot {
@@ -81,15 +81,19 @@ final class SystemInfoProvider: SystemInfoProviding {
         }
 
         guard let screen = NSScreen.screens.first else {
-            return DisplaySnapshot(gpuDescription: nil, displayName: "Built-in Display", displayResolution: "Unavailable")
+            return DisplaySnapshot(
+                gpuDescription: nil,
+                displayName: localizer.text(.dashboardBuiltInDisplay),
+                displayResolution: localizer.text(.unavailable)
+            )
         }
 
-        let description = screen.localizedName.isEmpty ? "Built-in Display" : screen.localizedName
+        let description = screen.localizedName.isEmpty ? localizer.text(.dashboardBuiltInDisplay) : screen.localizedName
         let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
         let mode = displayID.flatMap(CGDisplayCopyDisplayMode)
         let width = mode.map(\.pixelWidth) ?? Int(screen.frame.width.rounded())
         let height = mode.map(\.pixelHeight) ?? Int(screen.frame.height.rounded())
-        let resolution = width > 0 && height > 0 ? "\(width) × \(height)" : "Unavailable"
+        let resolution = width > 0 && height > 0 ? "\(width) × \(height)" : localizer.text(.unavailable)
 
         return DisplaySnapshot(gpuDescription: nil, displayName: description, displayResolution: resolution)
     }
@@ -115,8 +119,8 @@ final class SystemInfoProvider: SystemInfoProviding {
 
         let gpuDescription = (gpuEntry["sppci_cores"] as? String).map { "\($0)-core GPU" }
         let displayEntry = (gpuEntry["spdisplays_ndrvs"] as? [[String: Any]])?.first
-        let displayName = normalizedDisplayName(from: displayEntry) ?? "Built-in Display"
-        let resolution = normalizedDisplayResolution(from: displayEntry) ?? "Unavailable"
+        let displayName = normalizedDisplayName(from: displayEntry) ?? localizer.text(.dashboardBuiltInDisplay)
+        let resolution = normalizedDisplayResolution(from: displayEntry) ?? localizer.text(.unavailable)
 
         return DisplaySnapshot(
             gpuDescription: gpuDescription,

@@ -111,8 +111,8 @@ struct SystemActionReviewPlan: Identifiable, Equatable {
         guard !requests.isEmpty else { return nil }
 
         let action = syntheticRestoreAction(
-            id: "restore-category-\(category.rawValue)",
-            title: localizer.format(.restoreCategoryTitle, category.rawValue),
+            id: "restore-category-\(category.id)",
+            title: localizer.format(.restoreCategoryTitle, localizer.text(category.localizedKey)),
             symbolName: category.symbolName,
             category: category,
             requests: requests.map(\.1)

@@ -32,7 +32,7 @@ enum BatterySnapshotPresentation {
             return localizer.format(.batterySnapshotInsightHealthStable, health)
         }
 
-        return localizer.format(.batterySnapshotInsightHealthCondition, metrics.condition.displayName)
+        return localizer.format(.batterySnapshotInsightHealthCondition, localizer.text(metrics.condition.localizedKey))
     }
 
     static func chargerInsight(metrics: BatteryMetrics, localizer: AppLocalizer) -> String {

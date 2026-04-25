@@ -8,13 +8,13 @@ struct MDMMetrics: Equatable {
         case historicalTracesOnly
         case unknown
         
-        var displayName: String {
+        var localizedKey: LocalizedKey {
             switch self {
-            case .enrolled: return "Currently Enrolled"
-            case .notEnrolled: return "Not Enrolled"
-            case .depAssignedOnly: return "DEP/ADE Assigned"
-            case .historicalTracesOnly: return "Historical Traces Found"
-            case .unknown: return "Unknown"
+            case .enrolled: .mdmStatusCurrentlyEnrolled
+            case .notEnrolled: .mdmStatusNotCurrentlyEnrolled
+            case .depAssignedOnly: .mdmStatusDepAdeAssigned
+            case .historicalTracesOnly: .mdmStatusHistoricalTracesFound
+            case .unknown: .mdmStatusNeedsReview
             }
         }
     }
@@ -25,12 +25,12 @@ struct MDMMetrics: Equatable {
         case low
         case unknown
         
-        var displayName: String {
+        var localizedKey: LocalizedKey {
             switch self {
-            case .high: return "Likely Yes"
-            case .medium: return "Possible"
-            case .low: return "Unlikely"
-            case .unknown: return "Unknown"
+            case .high: .mdmRiskLikelyYes
+            case .medium: .mdmRiskPossible
+            case .low: .mdmRiskUnlikely
+            case .unknown: .mdmRiskNoClearTrigger
             }
         }
         

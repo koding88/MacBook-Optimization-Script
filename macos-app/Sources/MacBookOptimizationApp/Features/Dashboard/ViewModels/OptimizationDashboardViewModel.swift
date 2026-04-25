@@ -403,7 +403,7 @@ final class OptimizationDashboardViewModel: ObservableObject {
         let category = selectedCategory
         let actionRequests = restoreCandidates(in: category)
         guard !actionRequests.isEmpty else {
-            presentNoRestorableActionsResult(title: localizer.format(.restoreCategoryTitle, category.rawValue))
+            presentNoRestorableActionsResult(title: localizer.format(.restoreCategoryTitle, localizer.text(category.localizedKey)))
             return
         }
         pendingSystemActionReview = SystemActionReviewPlan.buildRestoreCategory(

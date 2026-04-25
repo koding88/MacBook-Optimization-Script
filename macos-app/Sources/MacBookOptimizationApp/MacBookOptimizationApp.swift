@@ -34,7 +34,7 @@ struct MacBookOptimizationApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .appSettings) {
-                Button(settings.language == .vietnamese ? "Cài đặt..." : "Settings...") {
+                Button(AppLocalizer(language: settings.language).text(.openSettings) + "...") {
                     model.openSettings()
                 }
                 .keyboardShortcut(",", modifiers: [.command])

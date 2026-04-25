@@ -1,14 +1,23 @@
 import Foundation
 
-enum ActionCategory: String, CaseIterable, Identifiable {
-    case system = "System"
-    case network = "Network"
-    case storage = "Storage"
-    case performance = "Performance"
-    case maintenance = "Maintenance"
-    case monitoring = "Monitoring"
+enum ActionCategory: CaseIterable, Identifiable {
+    case system
+    case network
+    case storage
+    case performance
+    case maintenance
+    case monitoring
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .system: "system"
+        case .network: "network"
+        case .storage: "storage"
+        case .performance: "performance"
+        case .maintenance: "maintenance"
+        case .monitoring: "monitoring"
+        }
+    }
 
     var localizedKey: LocalizedKey {
         switch self {
@@ -40,7 +49,15 @@ enum ActionStatus: String {
     case failed = "Failed"
     case needsReview = "Needs Review"
 
-    var badgeLabel: String { rawValue.uppercased() }
+    var localizedKey: LocalizedKey {
+        switch self {
+        case .ready: .statusReady
+        case .running: .statusRunning
+        case .enabled: .statusEnabled
+        case .failed: .statusFailed
+        case .needsReview: .statusNeedsReview
+        }
+    }
 }
 
 enum ActionKind {
@@ -394,7 +411,7 @@ struct ActionExecutionResult {
     }
 
     init(output: String, status: ActionStatus) {
-        let title = status.badgeLabel
+        let title = AppLocalizer(language: .english).text(status.localizedKey).uppercased()
         let message = output.isEmpty ? "Action completed." : output
         let toastType: ToastType = status == .failed ? .error : .info
         let activityType: ActivityEventType = status == .failed ? .error : .info

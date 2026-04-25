@@ -42,7 +42,7 @@ struct StatusesPanelView: View {
                         .sorted { localizer.string($0.titleKey) < localizer.string($1.titleKey) }
 
                     if !categoryActions.isEmpty {
-                        Section(category.rawValue) {
+                        Section(localizer.text(category.localizedKey)) {
                             ForEach(categoryActions) { action in
                                 HStack(alignment: .top, spacing: 12) {
                                     VStack(alignment: .leading, spacing: 4) {
