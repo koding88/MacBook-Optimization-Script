@@ -141,6 +141,20 @@ final class MemorySnapshotViewModel: ObservableObject {
         metricsHistory.map { ($0.timestamp, $0.pressureScore) }
     }
 
+    func preloadCurrentMetricsIfNeeded() {
+        guard currentMetrics == nil else { return }
+
+        do {
+            let metrics = try monitoringService.fetchCurrentMetrics()
+            currentMetrics = metrics
+            if metricsHistory.isEmpty {
+                metricsHistory = [metrics]
+            }
+        } catch {
+            // Keep dashboard resilient; snapshot view still surfaces errors when user opens it.
+        }
+    }
+
     private static func sanitizedErrorMessage(from error: Error) -> String {
         let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else {

@@ -181,7 +181,11 @@ struct DashboardView: View {
 
     private var dashboardOverview: some View {
         List {
-            SystemInfoView(summary: model.machineSummary, localizer: localizer)
+            SystemInfoView(
+                summary: model.machineSummary,
+                memoryMetrics: model.memorySnapshotViewModel?.currentMetrics,
+                localizer: localizer
+            )
 
             Section(localizer.text(.actionsTitle)) {
                 ForEach(model.actions.prefix(5)) { action in

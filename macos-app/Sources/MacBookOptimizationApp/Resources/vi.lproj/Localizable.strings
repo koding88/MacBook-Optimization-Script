@@ -72,7 +72,7 @@
 "activity.filter.last5Minutes" = "5 phút gần đây";
 "activity.filter.lastHour" = "1 giờ gần đây";
 "activity.filter.today" = "Hôm nay";
-"system.storage.availableSuffix" = "còn trống";
+"system.storage.availableSuffix" = "Còn trống";
 "system.label.chip" = "Chip";
 "system.label.cpu" = "CPU";
 "system.label.memory" = "Bộ nhớ";
@@ -496,7 +496,17 @@
 "common.yes" = "Có";
 "common.no" = "Không";
 "common.of" = "trên";
-"common.used" = "đã dùng";
+"common.used" = "Đã dùng";
+"dashboard.battery.charged" = "Đã sạc đầy";
+"dashboard.battery.healthy" = "Tốt";
+"dashboard.powerSource.ac" = "Nguồn AC";
+"dashboard.powerSource.battery" = "Dùng pin";
+"dashboard.version" = "Phiên bản";
+"dashboard.available" = "Khả dụng";
+"dashboard.cycleFormat" = "Chu kỳ %@";
+"dashboard.appleSilicon" = "Apple Silicon";
+"dashboard.unifiedMemory" = "Bộ nhớ hợp nhất";
+"dashboard.builtInDisplay" = "Màn hình tích hợp";
 "mdm.status.currentlyEnrolled" = "Đang được enroll";
 "mdm.status.notCurrentlyEnrolled" = "Chưa được enroll";
 "mdm.status.depAdeAssigned" = "Đã được gán DEP/ADE";

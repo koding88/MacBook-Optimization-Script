@@ -625,6 +625,22 @@ final class OptimizationDashboardViewModelTests: XCTestCase {
 
         XCTAssertEqual(model.machineSummary?.chipName, "Apple M3")
     }
+
+    @MainActor
+    func testDashboardPrefetchesMemoryMetricsForOverview() async {
+        let model = OptimizationDashboardViewModel(
+            engine: MockOptimizationEngine(),
+            stateStore: InMemoryStateStore(),
+            settings: AppSettingsStore(defaults: UserDefaults(suiteName: #function)!),
+            systemInfoProvider: MockSystemInfoProvider(),
+            memorySnapshotMonitoringService: MockMemoryMonitoringService()
+        )
+
+        try? await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(model.memorySnapshotViewModel?.currentMetrics?.usedBytes, 6_442_450_944)
+        XCTAssertEqual(model.memorySnapshotViewModel?.currentMetrics?.availableBytes, 10_200_547_328)
+    }
 }
 
 @MainActor
@@ -701,6 +717,35 @@ private struct DelayedMockSystemInfoProvider: SystemInfoProviding {
     func machineSummary() async -> MachineSummary {
         try? await Task.sleep(nanoseconds: 40_000_000)
         return await MockSystemInfoProvider().machineSummary()
+    }
+}
+
+private struct MockMemoryMonitoringService: MemoryMonitoringServiceProtocol {
+    func startMonitoring(interval: TimeInterval) async throws -> AsyncStream<MemoryMetrics> {
+        AsyncStream { continuation in
+            continuation.yield(fetchMetrics())
+            continuation.finish()
+        }
+    }
+
+    func stopMonitoring() {}
+
+    func fetchCurrentMetrics() throws -> MemoryMetrics {
+        fetchMetrics()
+    }
+
+    func fetchMetrics() -> MemoryMetrics {
+        MemoryMetrics(
+            timestamp: .now,
+            totalBytes: 17_179_869_184,
+            appBytes: 4_294_967_296,
+            wiredBytes: 1_073_741_824,
+            compressedBytes: 1_073_741_824,
+            cachedBytes: 8_053_063_680,
+            freeBytes: 2_147_483_648,
+            swapUsedBytes: 0,
+            pageSizeBytes: 16_384
+        )
     }
 }
 

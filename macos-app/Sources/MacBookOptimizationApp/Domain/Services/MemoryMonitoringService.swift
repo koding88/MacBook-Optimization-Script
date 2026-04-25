@@ -3,6 +3,7 @@ import Foundation
 protocol MemoryMonitoringServiceProtocol {
     func startMonitoring(interval: TimeInterval) async throws -> AsyncStream<MemoryMetrics>
     func stopMonitoring()
+    func fetchCurrentMetrics() throws -> MemoryMetrics
 }
 
 final class MemoryMonitoringService: MemoryMonitoringServiceProtocol {
@@ -43,6 +44,10 @@ final class MemoryMonitoringService: MemoryMonitoringServiceProtocol {
     func stopMonitoring() {
         monitoringTask?.cancel()
         monitoringTask = nil
+    }
+
+    func fetchCurrentMetrics() throws -> MemoryMetrics {
+        try snapshotCollector.collectSnapshot()
     }
 }
 

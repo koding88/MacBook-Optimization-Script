@@ -119,7 +119,8 @@ final class OptimizationDashboardViewModel: ObservableObject {
         restoreBaselineStore: RestoreBaselineStoreProtocol = RestoreBaselineStore(),
         settings: AppSettingsStore = AppSettingsStore(),
         systemInfoProvider: SystemInfoProviding? = nil,
-        commandExecutor: SystemCommandExecuting = SystemCommandExecutor()
+        commandExecutor: SystemCommandExecuting = SystemCommandExecutor(),
+        memorySnapshotMonitoringService: MemoryMonitoringServiceProtocol = MemoryMonitoringService()
     ) {
         self.stateStore = stateStore
         self.restoreBaselineStore = restoreBaselineStore
@@ -139,9 +140,10 @@ final class OptimizationDashboardViewModel: ObservableObject {
         // Initialize CPU snapshot view model once
         self.cpuSnapshotViewModel = CPUSnapshotViewModel()
         self.gpuSnapshotViewModel = GPUSnapshotViewModel()
-        self.memorySnapshotViewModel = MemorySnapshotViewModel()
+        self.memorySnapshotViewModel = MemorySnapshotViewModel(monitoringService: memorySnapshotMonitoringService)
         self.batterySnapshotViewModel = BatterySnapshotViewModel()
         self.mdmSnapshotViewModel = MDMSnapshotViewModel(commandExecutor: commandExecutor)
+        self.memorySnapshotViewModel?.preloadCurrentMetricsIfNeeded()
 
         Task {
             await loadMachineSummary()

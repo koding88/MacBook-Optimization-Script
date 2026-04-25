@@ -62,7 +62,18 @@ final class AppLocalizerTests: XCTestCase {
             .gpuSnapshotTelemetryNoDataTitle,
             .gpuSnapshotTelemetryNoDataDetail,
             .gpuSnapshotTelemetryMemoryWaitingTitle,
-            .gpuSnapshotTelemetryMemoryWaitingDetail
+            .gpuSnapshotTelemetryMemoryWaitingDetail,
+            .dashboardBatteryCharged,
+            .dashboardBatteryHealthy,
+            .dashboardPowerSourceAC,
+            .dashboardPowerSourceBattery,
+            .dashboardVersion,
+            .dashboardAvailable,
+            .dashboardCycleFormat,
+            .dashboardAppleSilicon,
+            .dashboardUnifiedMemory,
+            .dashboardBuiltInDisplay,
+            .commonUsed
         ]
 
         for key in requiredKeys {
@@ -93,6 +104,19 @@ final class AppLocalizerTests: XCTestCase {
         XCTAssertEqual(english.text(.gpuSnapshotTelemetryTopProcessTitle), "Top Process")
         XCTAssertEqual(vietnamese.text(.gpuSnapshotAdvancedRequestingAuthorization), "Đang chờ cấp quyền quản trị...")
         XCTAssertEqual(vietnamese.text(.gpuSnapshotTelemetryMemoryWaitingTitle), "Bộ nhớ GPU")
+    }
+
+    func testDashboardLocalizationReturnsExpectedStrings() {
+        let english = AppLocalizer(language: .english)
+        let vietnamese = AppLocalizer(language: .vietnamese)
+
+        XCTAssertEqual(english.text(.dashboardAvailable), "Available")
+        XCTAssertEqual(english.format(.dashboardCycleFormat, "145"), "Cycle 145")
+        XCTAssertEqual(english.text(.dashboardAppleSilicon), "Apple Silicon")
+
+        XCTAssertEqual(vietnamese.text(.dashboardAvailable), "Khả dụng")
+        XCTAssertEqual(vietnamese.format(.dashboardCycleFormat, "145"), "Chu kỳ 145")
+        XCTAssertEqual(vietnamese.text(.dashboardAppleSilicon), "Apple Silicon")
     }
 
     func testMissingLocalizationFallsBackToKey() {
