@@ -1,163 +1,122 @@
-# 🚀 MacBook Optimization Script
+# 🚀 MacBook Optimization Script v2.0
 
 ## 📋 Overview
 
-MacBook Optimization Script is a comprehensive tool designed to enhance your MacBook's performance through various optimizations and provide real-time system monitoring. Built with modularity in mind, it offers an intuitive interface and extensive customization options.
+**MacBook Optimization Script** is an enterprise-ready, modular toolkit for macOS built to optimize system kernel settings, clear storage, tune network stack parameters, manage power profiles, perform hardware diagnostics, and maintain system performance.
 
-### 🌟 Key Highlights
+Version 2.0 introduces **multi-system compatibility** (**Apple Silicon M1/M2/M3/M4** and **Intel**), **Signed System Volume (SSV)** protection, **APFS volume verification**, **exact user backup and rollback**, **multilingual UI (English & Spanish)**, **structured logging**, **non-interactive CLI automation**, **dry-run simulation mode**, and an **integration test suite**.
 
--   📊 Real-time system monitoring
--   🔧 One-click optimizations
--   🔄 Automatic status tracking
--   🛡️ Safe and reversible changes
--   📱 User-friendly interface
--   🔍 MDM Status Detection
--   💻 Intel/Apple Silicon compatibility checks
+---
+
+### 🌟 Key Enhancements
+
+- 💻 **Multi-System Compatibility:** Native support for macOS 10.15 (Catalina) through macOS 15+ (Sonoma/Sequoia), Apple Silicon (`arm64`), and Intel (`x86_64`).
+- 🛡️ **Dry-Run Mode (`--dry-run`):** Preview commands without modifying system settings.
+- 💾 **Exact State Backup & Restore:** Automatically backs up modified `defaults`, `sysctl`, and `pmset` keys before applying changes.
+- 🤖 **CLI Automation:** Non-interactive execution for dotfiles, CI/CD, and MDM (`--all`, `--module`, `--status`, `--rollback`).
+- 📜 **Structured Logging:** Tracks execution events in `~/.macbook_optimizer.log`.
+- 🌐 **Multilingual UI (i18n):** Real-time language switching between English and Spanish.
+- 🧪 **Test Suite:** Built-in integration test suite (`tests/test_modules.sh`).
+
+---
 
 ## 🚀 Quick Start
 
 ```bash
-# Clone this repository
+# Clone the repository
 git clone https://github.com/koding88/MacBook-Optimization-Script.git
 
-# Go into the repository
+# Navigate to directory
 cd MacBook-Optimization-Script
 
-# Make the script executable
-chmod +x script.sh
+# Grant execution permissions
+chmod +x script.sh fix_permissions.sh tests/test_modules.sh
 
-# Run the script
+# Run interactive optimization menu
 ./script.sh
 ```
 
-## 📚 Documentation
+---
 
-### System Requirements
+## 💻 CLI Usage & Command Flags
 
--   macOS 10.15 (Catalina) or later
--   Administrative privileges
--   Terminal access
--   Internet connection (for some features)
+```bash
+# Run simulation mode (preview commands without making changes)
+./script.sh --dry-run --module system
 
-### Directory Structure
+# Run all safe optimizations non-interactively
+./script.sh --all
+
+# Run specific optimization module
+./script.sh --module network
+
+# Display non-interactive system status report
+./script.sh --status
+
+# Restore system settings from exact backup or defaults
+./script.sh --rollback
+
+# Set interface language (es: Spanish, en: English)
+./script.sh --lang es
+
+# Run integration test suite
+./tests/test_modules.sh
+```
+
+---
+
+## 🏗️ Architecture & Modules
 
 ```
 MacBook-Optimization-Script/
-├── script.sh              # Main script
-├── modules/              # Module directory
-│   ├── config.sh         # Configuration module
-│   ├── ui_components.sh  # UI components
-│   ├── menu_handler.sh   # Menu handling
-│   ├── power_management.sh # Power and boot management
-│   ├── system_monitoring.sh # System monitoring
-│   └── ...              # Other modules
-├── assets/              # Images and resources
-└── docs/               # Documentation
+├── script.sh                   # Main script entry point & CLI parser
+├── fix_permissions.sh          # Permissions repair utility for state file
+├── tests/
+│   └── test_modules.sh         # Automated test suite
+├── modules/
+│   ├── sys_compat.sh           # OS, Architecture, SIP & SSV detection
+│   ├── logger.sh               # Structured logging (~/.macbook_optimizer.log)
+│   ├── i18n.sh                 # Multilingual translation dictionary (ES / EN)
+│   ├── backup.sh               # User preference backup before modifications
+│   ├── config.sh               # Configuration, safe read/write & status logging
+│   ├── rollback.sh             # Revert optimizations back to backup or defaults
+│   ├── ui_components.sh        # ANSI colored UI rendering & system info header
+│   ├── menu_handler.sh         # User input router (options 0-29)
+│   ├── system_optimizations.sh # Kernel sysctl tuning, memory purging, SSD tweaks
+│   ├── network_optimizations.sh# Network stack parameters, DNS flushing, firewall
+│   ├── storage_optimizations.sh# Cache cleanup, font caches, DS_Store removal
+│   ├── performance_tweaks.sh   # Spotlight, Dashboard version-check, animations, Dock
+│   ├── maintenance.sh          # APFS volume verification, periodic scripts, log truncation
+│   ├── system_monitoring.sh    # CPU, Memory, GPU, Battery, Disk & Temperature stats
+│   └── power_management.sh     # Low power mode toggle, AutoBoot (Intel), MDM detection
+└── README.md
 ```
 
-## ✨ Features
+---
 
-### 🖥 System Optimizations
+## 🛠️ Optimizations Summary
 
--   CPU and Memory optimization
--   SSD performance tuning
--   Security enhancements
--   Power management optimization
--   AutoBoot control (Intel Macs)
--   MDM status detection
+| Module | Feature | Description |
+| :--- | :--- | :--- |
+| **System** | Kernel Sysctl Tuning | Optimizes `maxvnodes`, `maxproc`, `maxfiles`, and IPC socket limits. |
+| **Memory** | RAM Purge & Cache Flush | Purges inactive RAM pages and flushes disk buffers via `sync`. |
+| **Storage** | Cache & `.DS_Store` Cleanup | Safely clears user/system caches and cleans hidden `.DS_Store` files. |
+| **Network** | TCP & DNS Tuning | Sets `delayed_ack=0`, blackhole routing, and flushes `mDNSResponder`. |
+| **Performance** | Animations & Dock | Speeds up window resizing, launch animations, and Dock hide/show delays. |
+| **Maintenance** | APFS Volume Check | Modern `diskutil verifyVolume` replacement for legacy permission checks. |
+| **Power** | Low Power & AutoBoot | Toggles Low Power Mode and manages lid auto-start (Intel Macs). |
+| **Rollback** | Revert to Backup / Defaults | Restores native user preferences from backup file or macOS defaults. |
 
-### 🌐 Network Optimizations
+---
 
--   TCP/IP stack optimization
--   DNS cache management
--   Firewall configuration
--   Network performance tuning
+## 🔒 Security & System Requirements
 
-### 💾 Storage Optimizations
+- **Supported OS:** macOS 10.15 (Catalina) through macOS 15+ (Sequoia).
+- **Privileges:** Standard user with `sudo` administrative rights when applying system tweaks.
+- **Safety:** Non-destructive; protected system files are preserved on SSV-enabled releases.
 
--   System cache cleanup
--   Unused language removal
--   Font cache optimization
--   .DS_Store file management
-
-### ⚡ Performance Tweaks
-
--   Spotlight indexing control
--   Animation optimization
--   Dashboard management
--   Dock performance tuning
-
-### 🔋 Power Management
-
--   Power saving mode toggle
--   AutoBoot control (Intel Macs)
--   Sleep/Wake optimization
--   Battery life enhancement
-
-### 🔍 System Monitoring
-
--   Real-time performance tracking
--   MDM status detection
--   System health checks
--   Optimization status tracking
-
-## 📊 Status Tracking
-
-The script includes a comprehensive status tracking system that provides:
-
-| Feature           | Description                               |
-| ----------------- | ----------------------------------------- |
-| Real-time Updates | Immediate feedback on optimization status |
-| History Logging   | Track all performed optimizations         |
-| Success Metrics   | Monitor success/failure rates             |
-| Timestamps        | Record when optimizations were performed  |
-| MDM Detection     | Check for Mobile Device Management        |
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how you can help:
-
-1. Fork the repository at https://github.com/koding88/MacBook-Optimization-Script/fork
-2. Create your feature branch:
-    ```
-    git checkout -b feature/AmazingFeature
-    ```
-3. Commit your changes:
-    ```
-    git commit -m 'Add some AmazingFeature'
-    ```
-4. Push to the branch:
-    ```
-    git push origin feature/AmazingFeature
-    ```
-5. Open a Pull Request at https://github.com/koding88/MacBook-Optimization-Script/pulls
-
-For more details, please see our [Contributing Guidelines](CONTRIBUTING.md).
-
-## 🔒 Security
-
-This script requires administrative privileges. Please:
-
--   Review the code before running
--   Keep your system up to date
--   Back up important data
--   Report security issues through our [Security Policy](SECURITY.md)
+---
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
--   [Apple Developer Documentation](https://developer.apple.com/documentation/)
--   [MacOS Command Line Tools](https://developer.apple.com/library/archive/technotes/tn2002/tn2002.html)
--   All [contributors](https://github.com/koding88/MacBook-Optimization-Script/graphs/contributors)
-
-## 📞 Support
-
-Need help? Here are some resources:
-
--   🐛 Report bugs in [Issues](https://github.com/koding88/MacBook-Optimization-Script/issues)
--   📧 Contact: [duongngocanh2k03@gmail.com](mailto:duongngocanh2k03@gmail.com)
-
----
+Distributed under the MIT License. See `LICENSE` for details.
