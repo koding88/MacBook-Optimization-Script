@@ -1,13 +1,37 @@
 #!/bin/bash
 
-# Menu Handler Function
+# ==============================================================================
+# Module: menu_handler.sh
+# Purpose: Handle user interaction and route choices to module functions
+# ==============================================================================
+
+function run_all_optimizations() {
+    echo -e "${GREEN}=== Running All Safe System Optimizations ===${NC}"
+    optimize_system_performance
+    optimize_memory_management
+    optimize_ssd
+    optimize_security
+    optimize_power
+    optimize_network_settings
+    flush_dns_cache
+    enable_firewall
+    clear_system_caches
+    clear_font_caches
+    disable_animations
+    optimize_dock
+    run_maintenance_scripts
+    clear_system_logs
+    terminate_zombie_processes
+    run_system_benchmark
+    echo -e "${GREEN}✓ All safe optimizations executed successfully.${NC}"
+}
 
 function handle_user_choice() {
     while true; do
         clear
         display_main_menu
-        read -p "Enter your choice: " choice
-        echo ""  # Add a blank line for better readability
+        read -p "Enter your choice (0-34): " choice
+        echo ""
 
         case $choice in
             1)
@@ -94,25 +118,20 @@ function handle_user_choice() {
                 show_all_statuses
                 ;;
             22)
-                echo -e "${YELLOW}Resetting all optimization states...${NC}"
+                echo -e "${YELLOW}Resetting all optimization state tracking...${NC}"
                 if [ -f "$CONFIG_FILE" ]; then
-                    if rm "$CONFIG_FILE" 2>/dev/null; then
+                    if rm -f "$CONFIG_FILE" 2>/dev/null; then
                         if initialize_config; then
-                            echo -e "${GREEN}All optimization states reset successfully${NC}"
+                            echo -e "${GREEN}Optimization tracking state reset successfully.${NC}"
                         else
-                            echo -e "${RED}Failed to recreate config file${NC}"
+                            echo -e "${RED}Failed to recreate config file.${NC}"
                         fi
                     else
-                        echo -e "${RED}Failed to remove existing config file${NC}"
-                        echo -e "${YELLOW}You may need to manually delete: $CONFIG_FILE${NC}"
+                        echo -e "${RED}Failed to remove config file.${NC}"
                     fi
                 else
-                    echo -e "${YELLOW}Config file doesn't exist, creating new one...${NC}"
-                    if initialize_config; then
-                        echo -e "${GREEN}Config file created successfully${NC}"
-                    else
-                        echo -e "${RED}Failed to create config file${NC}"
-                    fi
+                    initialize_config
+                    echo -e "${GREEN}New config state file created.${NC}"
                 fi
                 ;;
             23)
@@ -130,19 +149,49 @@ function handle_user_choice() {
             26)
                 check_mdm_status
                 ;;
+            27)
+                rollback_all_optimizations
+                ;;
+            28)
+                if [ "$CURRENT_LANG" = "ES" ]; then
+                    set_language "EN"
+                    echo -e "${GREEN}Language switched to English.${NC}"
+                else
+                    set_language "ES"
+                    echo -e "${GREEN}Idioma cambiado a Español.${NC}"
+                fi
+                ;;
+            29)
+                view_log_file
+                ;;
+            30)
+                check_for_updates
+                ;;
+            31)
+                run_parallel_diagnostics
+                ;;
+            32)
+                check_thermal_status
+                terminate_zombie_processes
+                ;;
+            33)
+                run_system_benchmark
+                ;;
+            34)
+                install_weekly_scheduler
+                ;;
             0)
-                echo -e "${GREEN}Quitting the script. Bye!${NC}"
+                echo -e "${GREEN}$(t "QUIT_MSG")${NC}"
                 exit 0
                 ;;
             *)
-                echo -e "${RED}Invalid choice. Please enter a valid option.${NC}"
+                echo -e "${RED}$(t "INVALID_CHOICE")${NC}"
                 ;;
         esac
         
-        # Add pause after each action
         if [ "$choice" != "0" ]; then
-            echo -e "\nPress Enter to continue..."
+            echo -e "\n$(t "PRESS_ENTER")"
             read
         fi
     done
-} 
+}
